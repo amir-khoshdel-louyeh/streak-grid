@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS habits(
   schedule_json TEXT NOT NULL DEFAULT '{}',
   start_date TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  archived INTEGER NOT NULL DEFAULT 0
+  archived INTEGER NOT NULL DEFAULT 0,
+  remind_at TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -84,6 +85,9 @@ def migrate(conn: sqlite3.Connection) -> None:
     conn.executescript(_COMPLETIONS_DDL)
     conn.executescript(_PAUSES_DDL)
     conn.execute(_ACHIEVEMENTS_DDL)
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(habits)").fetchall()]
+    if "remind_at" not in cols:  # N4: upgrade pre-existing DBs (e.g. seeded v1)
+        conn.execute("ALTER TABLE habits ADD COLUMN remind_at TEXT NOT NULL DEFAULT ''")
     conn.commit()
 
 
@@ -103,6 +107,7 @@ def create_habit(
     schedule_json: str = "{}",
     start_date: str,
     folder_id: int | None = None,
+    remind_at: str = "",
 ) -> int:
     """Insert habit, return row id. Minimal validation for S08 dialog."""
     from datetime import datetime, timezone
@@ -123,10 +128,10 @@ def create_habit(
     now = datetime.now(timezone.utc).isoformat()
     cur = conn.execute(
         """INSERT INTO habits(name, folder_id, type, target_count, schedule_type,
-                              schedule_json, start_date, created_at, archived)
-           VALUES(?,?,?,?,?,?,?,?,0)""",
+                              schedule_json, start_date, created_at, archived, remind_at)
+           VALUES(?,?,?,?,?,?,?,?,0,?)""",
         (name, folder_id, habit_type, int(target_count or 1),
-         schedule_type, schedule_json, start_date, now),
+         schedule_type, schedule_json, start_date, now, remind_at),
     )
     conn.commit()
     return int(cur.lastrowid)
@@ -140,9 +145,9 @@ def list_habits(conn: sqlite3.Connection, *, include_archived: bool = False) -> 
 
 def update_habit(conn: sqlite3.Connection, habit_id: int, **fields) -> None:
     """Update habit columns (U1). Allowed: name, type, target_count,
-    schedule_type, schedule_json, folder_id, start_date, archived."""
+    schedule_type, schedule_json, folder_id, start_date, archived, remind_at."""
     allowed = {"name", "type", "target_count", "schedule_type",
-               "schedule_json", "folder_id", "start_date", "archived"}
+               "schedule_json", "folder_id", "start_date", "archived", "remind_at"}
     unknown = set(fields) - allowed
     if unknown:
         raise ValueError(f"bad habit fields: {sorted(unknown)}")
