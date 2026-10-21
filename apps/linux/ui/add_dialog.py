@@ -5,13 +5,17 @@ from __future__ import annotations
 import json
 from datetime import date
 
+from PySide6.QtCore import QTime
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHBoxLayout,
     QLineEdit,
     QSpinBox,
+    QTimeEdit,
 )
 
 
@@ -33,6 +37,14 @@ class AddHabitDialog(QDialog):
         )
         self.detail_edit = QLineEdit()
         self.detail_edit.setPlaceholderText("weekly: 1,3,5 | interval: 3 | times: 3 | else empty")
+        self.remind_check = QCheckBox("Remind at")
+        self.remind_time = QTimeEdit()
+        self.remind_time.setDisplayFormat("HH:mm")
+        self.remind_time.setEnabled(False)
+        self.remind_check.toggled.connect(self.remind_time.setEnabled)
+        remind_row = QHBoxLayout()
+        remind_row.addWidget(self.remind_check)
+        remind_row.addWidget(self.remind_time)
 
         form = QFormLayout(self)
         form.addRow("Name", self.name_edit)
@@ -40,6 +52,7 @@ class AddHabitDialog(QDialog):
         form.addRow("Target", self.target_spin)
         form.addRow("Schedule", self.schedule_box)
         form.addRow("Detail", self.detail_edit)
+        form.addRow("Reminder", remind_row)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -66,6 +79,10 @@ class AddHabitDialog(QDialog):
             self.detail_edit.setText(str(params.get("times", 3)))
         else:
             self.detail_edit.setText("")
+        remind_at = str(habit.get("remind_at") or "")
+        self.remind_check.setChecked(bool(remind_at))
+        if remind_at:
+            self.remind_time.setTime(QTime.fromString(remind_at, "HH:mm"))
 
     def values(self) -> dict:
         """Validated dialog values -> store.create_habit kwargs."""
@@ -92,4 +109,6 @@ class AddHabitDialog(QDialog):
             "schedule_type": schedule_type,
             "schedule_json": schedule_json,
             "start_date": date.today().isoformat(),
+            "remind_at": self.remind_time.time().toString("HH:mm")
+            if self.remind_check.isChecked() else "",
         }

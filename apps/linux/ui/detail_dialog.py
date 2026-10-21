@@ -196,6 +196,7 @@ class DetailDialog(QDialog):
                 target_count=vals["target_count"],
                 schedule_type=vals["schedule_type"],
                 schedule_json=vals["schedule_json"],
+                remind_at=vals["remind_at"],
             )
             self._reload_habit()
             self._highlight_days()
