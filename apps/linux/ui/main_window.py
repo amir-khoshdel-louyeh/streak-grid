@@ -1,4 +1,4 @@
-"""Main window — S10-2: Grid shows sample habit heatmap."""
+"""Main window — R1: single scrollable page (Today / All / Heatmap / Stats)."""
 
 from __future__ import annotations
 
@@ -7,12 +7,13 @@ from datetime import date
 
 from PySide6.QtWidgets import (
     QComboBox,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QTabWidget,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -50,14 +51,6 @@ from ui.stats_view import StatsView
 from ui.theme import apply_theme, is_dark, set_dark
 
 
-def _placeholder(text: str) -> QWidget:
-    page = QWidget()
-    layout = QVBoxLayout(page)
-    layout.addWidget(QLabel(text))
-    layout.addStretch(1)
-    return page
-
-
 class MainWindow(QMainWindow):
     def __init__(self, conn: sqlite3.Connection | None = None) -> None:
         super().__init__()
@@ -65,8 +58,11 @@ class MainWindow(QMainWindow):
         self.resize(900, 600)
         self.conn = conn or init_db()
 
-        self.tabs = QTabWidget()
-        self.setCentralWidget(self.tabs)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        page = QWidget()
+        page_layout = QVBoxLayout(page)
+        self.sections: list[QGroupBox] = []
 
         view_menu = self.menuBar().addMenu("View")
         self.theme_action = view_menu.addAction("Toggle theme")
@@ -74,8 +70,8 @@ class MainWindow(QMainWindow):
         self.theme_action.triggered.connect(self._on_toggle_theme)
         self._setup_shortcuts()
 
-        self.today_page = QWidget()
-        today_layout = QVBoxLayout(self.today_page)
+        today_section = QGroupBox("Today")
+        today_layout = QVBoxLayout(today_section)
         header = QHBoxLayout()
         self.progress_ring = ProgressRing()
         self.progress_label = QLabel("Today")
@@ -91,18 +87,25 @@ class MainWindow(QMainWindow):
         self.empty_label = QLabel("No habits yet. Add your first habit.")
         today_layout.addWidget(cards_host)
         today_layout.addWidget(self.empty_label)
+        buttons_row = QHBoxLayout()
         self.add_button = QPushButton("Add habit")
         self.add_button.clicked.connect(self._on_add)
         self.achv_button = QPushButton("🏆 Achievements")
         self.achv_button.clicked.connect(self._on_show_achievements)
-        today_layout.addWidget(self.add_button)
-        today_layout.addWidget(self.achv_button)
+        buttons_row.addWidget(self.add_button)
+        buttons_row.addWidget(self.achv_button)
+        today_layout.addLayout(buttons_row)
         self.today_cards: list[HabitCard] = []
-        self.tabs.addTab(self.today_page, "Today")
+        page_layout.addWidget(today_section)
+        self.sections.append(today_section)
         self.list_view = ListView(self.conn)
-        self.tabs.addTab(self.list_view, "List")
-        self.grid_page = QWidget()
-        grid_layout = QVBoxLayout(self.grid_page)
+        list_section = QGroupBox("All habits")
+        list_section.setLayout(QVBoxLayout())
+        list_section.layout().addWidget(self.list_view)
+        page_layout.addWidget(list_section)
+        self.sections.append(list_section)
+        grid_section = QGroupBox("Heatmap")
+        grid_layout = QVBoxLayout(grid_section)
         self.grid_selector = QComboBox()
         self.grid_selector.currentIndexChanged.connect(lambda _i: self.refresh_grid())
         mode_row = QHBoxLayout()
@@ -126,10 +129,17 @@ class MainWindow(QMainWindow):
         grid_layout.addLayout(mode_row)
         grid_layout.addWidget(self.grid_heatmap)
         grid_layout.addWidget(self.export_button)
-        grid_layout.addStretch(1)
-        self.tabs.addTab(self.grid_page, "Grid")
+        page_layout.addWidget(grid_section)
+        self.sections.append(grid_section)
         self.stats_view = StatsView(self.conn)
-        self.tabs.addTab(self.stats_view, "Stats")
+        stats_section = QGroupBox("Stats")
+        stats_section.setLayout(QVBoxLayout())
+        stats_section.layout().addWidget(self.stats_view)
+        page_layout.addWidget(stats_section)
+        self.sections.append(stats_section)
+        page_layout.addStretch(1)
+        self.scroll.setWidget(page)
+        self.setCentralWidget(self.scroll)
         self._folder_ids: list[int | None] = [None]
         self.refresh_folders()
         self.tray = create_tray(self, on_show=self._show_from_tray, on_quit=self._quit_from_tray)
@@ -162,16 +172,17 @@ class MainWindow(QMainWindow):
         self.nag.set_interval(int(minutes))
 
     def _setup_shortcuts(self) -> None:
-        """Ctrl+N new habit, Ctrl+1..4 switch tabs (U6)."""
+        """Ctrl+N new habit, Ctrl+1..4 scroll to sections (R2 prep)."""
         from PySide6.QtGui import QShortcut
 
         QShortcut("Ctrl+N", self, activated=self._on_add_focus)
         for i in range(4):
             QShortcut(f"Ctrl+{i + 1}", self,
-                      activated=lambda idx=i: self.tabs.setCurrentIndex(idx))
+                      activated=lambda idx=i: self.scroll.ensureWidgetVisible(
+                          self.sections[idx], 50, 50))
 
     def _on_add_focus(self) -> None:
-        self.tabs.setCurrentIndex(0)
+        self.scroll.verticalScrollBar().setValue(0)
         self._on_add()
 
     def _show_from_tray(self) -> None:
