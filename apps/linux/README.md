@@ -1,6 +1,11 @@
 # Linux app (Python + PySide6)
 
-Status: v1 (S20) — Today + Detail + Grid + List + Stats + achievements + tray/nag/widget.
+Status: v1 — single scrollable page (Today + All habits + Heatmap + Stats)
+with achievements, tray/nag/widget.
+
+## Shortcuts
+
+`Ctrl+N` new habit · `Ctrl+1..4` jump to sections · `/` search · `Ctrl+T` theme
 
 ## Run
 
