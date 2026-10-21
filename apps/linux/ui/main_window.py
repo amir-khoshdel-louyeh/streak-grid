@@ -66,6 +66,7 @@ class MainWindow(QMainWindow):
         self.theme_action = view_menu.addAction("Toggle theme")
         self.theme_action.setShortcut("Ctrl+T")
         self.theme_action.triggered.connect(self._on_toggle_theme)
+        self._setup_shortcuts()
 
         self.today_page = QWidget()
         today_layout = QVBoxLayout(self.today_page)
@@ -142,6 +143,19 @@ class MainWindow(QMainWindow):
         )
         self.nag.start()
         self.refresh_all()
+
+    def _setup_shortcuts(self) -> None:
+        """Ctrl+N new habit, Ctrl+1..4 switch tabs (U6)."""
+        from PySide6.QtGui import QShortcut
+
+        QShortcut("Ctrl+N", self, activated=self._on_add_focus)
+        for i in range(4):
+            QShortcut(f"Ctrl+{i + 1}", self,
+                      activated=lambda idx=i: self.tabs.setCurrentIndex(idx))
+
+    def _on_add_focus(self) -> None:
+        self.tabs.setCurrentIndex(0)
+        self._on_add()
 
     def _show_from_tray(self) -> None:
         self.show()
