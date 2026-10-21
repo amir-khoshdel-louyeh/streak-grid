@@ -37,15 +37,22 @@ class NagService(QObject):
         interval_min: int = 15,
         notify: Callable[[str, str], None] | None = None,
         is_snoozed: Callable[[], bool] | None = None,
+        on_tick: Callable[[list[dict]], None] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.conn = conn
         self.notify = notify or (lambda _t, _b: None)
         self.is_snoozed = is_snoozed or (lambda: False)
+        self.on_tick = on_tick or (lambda _p: None)
         self.timer = QTimer(self)
-        self.timer.setInterval(int(interval_min * 60 * 1000))
+        self.set_interval(interval_min)
         self.timer.timeout.connect(self.tick)
+
+    def set_interval(self, interval_min: int) -> None:
+        self.timer.setInterval(max(1, int(interval_min)) * 60 * 1000)
+        if self.timer.isActive():
+            self.timer.start()
 
     def start(self) -> None:
         self.timer.start()
@@ -56,9 +63,11 @@ class NagService(QObject):
     def tick(self) -> list[dict]:
         """Notify (critical) while pending; silent once all done or snoozed."""
         if self.is_snoozed():
+            self.on_tick([])
             return []
         pending = find_pending(self.conn)
         if pending:
             names = ", ".join(h.get("name", "?") for h in pending[:3])
             self.notify(f"{len(pending)} habits due", names or "Time for habits!")
+        self.on_tick(pending)
         return pending

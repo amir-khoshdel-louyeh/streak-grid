@@ -60,6 +60,13 @@ def create_tray(
     return tray
 
 
+def set_alert(tray: QSystemTrayIcon | None, alert: bool) -> None:
+    """Swap tray icon to orange alert (nagging) or back to normal."""
+    if tray is None:
+        return
+    tray.setIcon(make_icon(alert=alert))
+
+
 def add_quick_actions(tray: QSystemTrayIcon | None, on_done=None, on_snooze=None) -> None:
     """Append Done / Snooze 15m actions to existing tray menu (S17-3)."""
     if tray is None:

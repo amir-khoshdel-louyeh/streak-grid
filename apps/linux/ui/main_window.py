@@ -22,7 +22,7 @@ from core.heatmap import build_matrix, build_month_matrix
 from core.schedule import is_due
 from core.streak import current_streak, is_done, is_paused
 from services.nag import NagService
-from services.tray import add_quick_actions, create_tray, minimize_to_tray
+from services.tray import add_quick_actions, create_tray, minimize_to_tray, set_alert
 from db.store import (
     create_folder,
     create_habit,
@@ -140,6 +140,7 @@ class MainWindow(QMainWindow):
             notify=lambda t, b: _send(t, b, urgency="critical"),
             is_snoozed=lambda: self.snoozed_until is not None
             and _dt.now() < self.snoozed_until,
+            on_tick=lambda pending: set_alert(self.tray, bool(pending)),
         )
         self.nag.start()
         self.refresh_all()
