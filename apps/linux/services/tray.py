@@ -82,6 +82,21 @@ def add_quick_actions(tray: QSystemTrayIcon | None, on_done=None, on_snooze=None
     tray.setContextMenu(menu)
 
 
+def add_interval_menu(tray: QSystemTrayIcon | None, current_min: int, on_pick=None) -> None:
+    """Submenu 'Nag every' with 5/15/30/60 min choices (N3)."""
+    if tray is None:
+        return
+    menu = tray.contextMenu() or QMenu()
+    sub = menu.addMenu("Nag every")
+    for minutes in (5, 15, 30, 60):
+        action = sub.addAction(f"{minutes} min")
+        action.setCheckable(True)
+        action.setChecked(minutes == current_min)
+        if on_pick is not None:
+            action.triggered.connect(lambda _c, m=minutes: on_pick(m))
+    tray.setContextMenu(menu)
+
+
 def minimize_to_tray(window: QWidget, tray: QSystemTrayIcon | None, event) -> bool:
     """Hide to tray on close when tray exists. Returns True if handled."""
     if tray is not None and tray.isVisible():

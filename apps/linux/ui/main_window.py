@@ -22,7 +22,13 @@ from core.heatmap import build_matrix, build_month_matrix
 from core.schedule import is_due
 from core.streak import current_streak, is_done, is_paused
 from services.nag import NagService
-from services.tray import add_quick_actions, create_tray, minimize_to_tray, set_alert
+from services.tray import (
+    add_interval_menu,
+    add_quick_actions,
+    create_tray,
+    minimize_to_tray,
+    set_alert,
+)
 from db.store import (
     create_folder,
     create_habit,
@@ -132,11 +138,15 @@ class MainWindow(QMainWindow):
         add_quick_actions(self.tray, on_done=self._on_tray_done, on_snooze=self._on_tray_snooze)
         from datetime import datetime as _dt
 
+        from PySide6.QtCore import QSettings as _QS
+
         from services.notify import send as _send
 
+        nag_min = int(_QS("StreakGrid", "StreakGrid").value("streakgrid/nag_min", 15) or 15)
+        add_interval_menu(self.tray, nag_min, on_pick=self._on_pick_nag_interval)
         self.nag = NagService(
             self.conn,
-            interval_min=15,
+            interval_min=nag_min,
             notify=lambda t, b: _send(t, b, urgency="critical"),
             is_snoozed=lambda: self.snoozed_until is not None
             and _dt.now() < self.snoozed_until,
@@ -144,6 +154,12 @@ class MainWindow(QMainWindow):
         )
         self.nag.start()
         self.refresh_all()
+
+    def _on_pick_nag_interval(self, minutes: int) -> None:
+        from PySide6.QtCore import QSettings as _QS
+
+        _QS("StreakGrid", "StreakGrid").setValue("streakgrid/nag_min", int(minutes))
+        self.nag.set_interval(int(minutes))
 
     def _setup_shortcuts(self) -> None:
         """Ctrl+N new habit, Ctrl+1..4 switch tabs (U6)."""
