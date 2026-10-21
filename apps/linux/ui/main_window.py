@@ -172,7 +172,7 @@ class MainWindow(QMainWindow):
         self.nag.set_interval(int(minutes))
 
     def _setup_shortcuts(self) -> None:
-        """Ctrl+N new habit, Ctrl+1..4 scroll to sections (R2 prep)."""
+        """Ctrl+N new habit, Ctrl+1..4 scroll to sections, / focuses search."""
         from PySide6.QtGui import QShortcut
 
         QShortcut("Ctrl+N", self, activated=self._on_add_focus)
@@ -180,6 +180,11 @@ class MainWindow(QMainWindow):
             QShortcut(f"Ctrl+{i + 1}", self,
                       activated=lambda idx=i: self.scroll.ensureWidgetVisible(
                           self.sections[idx], 50, 50))
+        QShortcut("/", self, activated=self._on_focus_search)
+
+    def _on_focus_search(self) -> None:
+        self.scroll.ensureWidgetVisible(self.sections[1], 50, 50)
+        self.list_view.search.setFocus()
 
     def _on_add_focus(self) -> None:
         self.scroll.verticalScrollBar().setValue(0)
