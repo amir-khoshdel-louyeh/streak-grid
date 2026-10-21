@@ -6,7 +6,7 @@ import sqlite3
 from datetime import date
 from typing import Callable
 
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtCore import Qt, QPoint, QTimer
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 from PySide6.QtCore import QSettings
 
@@ -36,10 +36,20 @@ class DesktopWidget(QWidget):
         self.layout = QVBoxLayout(self)
         self.layout.addWidget(QLabel("StreakGrid — Today"))
         self.rows: list[QWidget] = []
+        self._poller = QTimer(self)
+        self._poller.timeout.connect(lambda: self.refresh())
         self._restore_position()
         if not self.can_pin():
             # Wayland-safe fallback: tray quick menu already covers check-off.
             self.setToolTip("Compositor blocks pinning — use tray menu.")
+
+    def start_auto_refresh(self, seconds: int = 60) -> None:
+        """Re-read SQLite on a timer so main-app edits appear (N5)."""
+        self._poller.setInterval(max(5, int(seconds)) * 1000)
+        self._poller.start()
+
+    def stop_auto_refresh(self) -> None:
+        self._poller.stop()
 
     def _settings(self) -> QSettings:
         return QSettings(self.SETTINGS_ORG, self.SETTINGS_APP)
