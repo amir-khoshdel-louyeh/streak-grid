@@ -1,11 +1,38 @@
-"""Tray icon — S17-2: show/hide + minimize-to-tray (X11/Wayland safe)."""
+"""Tray icon — N1: painted icon + minimize-to-tray (X11/Wayland safe)."""
 
 from __future__ import annotations
 
 from typing import Callable
 
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon, QWidget
+
+
+def make_icon(alert: bool = False) -> QIcon:
+    """Painted 3x3 heatmap icon (green; orange when nagging). No asset files."""
+    size = 64
+    pix = QPixmap(size, size)
+    pix.fill(Qt.transparent)
+    painter = QPainter(pix)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(QColor("#24283b"))
+    painter.drawRoundedRect(0, 0, size, size, 14, 14)
+    cells = ["#216e39", "#40c463", "#9be9a8",
+             "#30a14e", "#216e39", "#40c463",
+             "#9be9a8", "#30a14e", "#216e39"]
+    if alert:
+        cells = ["#e0af68"] * 9
+    pad, gap = 12, 4
+    cell = (size - 2 * pad - 2 * gap) // 3
+    for i, color in enumerate(cells):
+        painter.setBrush(QColor(color))
+        x = pad + (i % 3) * (cell + gap)
+        y = pad + (i // 3) * (cell + gap)
+        painter.drawRoundedRect(x, y, cell, cell, 4, 4)
+    painter.end()
+    return QIcon(pix)
 
 
 def create_tray(
@@ -16,7 +43,7 @@ def create_tray(
     """Create tray icon; None when no system tray (headless/Wayland w/o tray)."""
     if not QSystemTrayIcon.isSystemTrayAvailable():
         return None
-    tray = QSystemTrayIcon(QIcon(), host)
+    tray = QSystemTrayIcon(make_icon(), host)
     tray.setToolTip("StreakGrid")
     menu = QMenu()
     show_action = menu.addAction("Show")
