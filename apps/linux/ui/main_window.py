@@ -52,11 +52,15 @@ from ui.theme import apply_theme, is_dark, set_dark
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, conn: sqlite3.Connection | None = None) -> None:
+    def __init__(self, conn: sqlite3.Connection | None = None,
+                 db_path: str | None = None) -> None:
         super().__init__()
         self.setWindowTitle("StreakGrid")
         self.resize(900, 600)
+        from db.store import DEFAULT_DB_PATH
+
         self.conn = conn or init_db()
+        self.db_path = db_path or (DEFAULT_DB_PATH if conn is None else None)
 
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -64,6 +68,12 @@ class MainWindow(QMainWindow):
         page_layout = QVBoxLayout(page)
         self.sections: list[QGroupBox] = []
 
+        file_menu = self.menuBar().addMenu("File")
+        self.backup_action = file_menu.addAction("Backup now…")
+        self.backup_action.setShortcut("Ctrl+B")
+        self.backup_action.triggered.connect(self._on_backup)
+        self.restore_action = file_menu.addAction("Restore backup…")
+        self.restore_action.triggered.connect(self._on_restore)
         view_menu = self.menuBar().addMenu("View")
         self.theme_action = view_menu.addAction("Toggle theme")
         self.theme_action.setShortcut("Ctrl+T")
@@ -164,6 +174,62 @@ class MainWindow(QMainWindow):
         )
         self.nag.start()
         self.refresh_all()
+
+    def _on_backup(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+
+        from services.backup import backup_db, default_backup_path
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Backup database", default_backup_path(), "SQLite (*.db)")
+        if path:
+            self.do_backup(path)
+
+    def do_backup(self, path: str) -> str:
+        from services.backup import backup_db
+
+        backup_db(self.conn, path)
+        QMessageBox.information(self, "Backup", f"Saved {path}")
+        return path
+
+    def _on_restore(self) -> None:
+        from pathlib import Path
+
+        from PySide6.QtWidgets import QFileDialog
+
+        if self.db_path is None:
+            QMessageBox.warning(self, "Restore",
+                                "Restore needs a file database (restart the app normally).")
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Restore backup", str(Path.home()), "SQLite (*.db)")
+        if not path:
+            return
+        if QMessageBox.question(
+                self, "Restore",
+                "Replace current data with this backup?") != QMessageBox.Yes:
+            return
+        self.do_restore(path)
+
+    def do_restore(self, backup_path: str) -> None:
+        """Swap live DB file for backup and reconnect every view (B1)."""
+        from services.backup import restore_db_file
+
+        if self.db_path is None:
+            raise ValueError("no file database to restore into")
+        try:
+            self.conn.close()
+        except sqlite3.Error:
+            pass
+        restore_db_file(backup_path, self.db_path)
+        new_conn = init_db(self.db_path)
+        self.conn = new_conn
+        self.list_view.conn = new_conn
+        self.stats_view.conn = new_conn
+        self.nag.conn = new_conn
+        self.refresh_folders()
+        self.refresh_all()
+        QMessageBox.information(self, "Restore", "Backup restored.")
 
     def _on_pick_nag_interval(self, minutes: int) -> None:
         from PySide6.QtCore import QSettings as _QS
