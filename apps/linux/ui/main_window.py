@@ -8,6 +8,7 @@ from datetime import date
 from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -21,7 +22,7 @@ from PySide6.QtWidgets import (
 from core.achievements import ACHIEVEMENTS, check_unlocks, unlock
 from core.heatmap import build_matrix, build_month_matrix
 from core.schedule import is_due
-from core.streak import current_streak, is_done, is_paused
+from core.streak import best_streak, current_streak, is_done, is_paused
 from services.nag import NagService
 from services.tray import (
     add_interval_menu,
@@ -66,6 +67,8 @@ class MainWindow(QMainWindow):
         self.scroll.setWidgetResizable(True)
         page = QWidget()
         page_layout = QVBoxLayout(page)
+        page_layout.setSpacing(10)
+        page_layout.setContentsMargins(12, 12, 12, 12)
         self.sections: list[QGroupBox] = []
 
         file_menu = self.menuBar().addMenu("File")
@@ -82,6 +85,7 @@ class MainWindow(QMainWindow):
 
         today_section = QGroupBox("Today")
         today_layout = QVBoxLayout(today_section)
+        today_layout.setSpacing(8)
         header = QHBoxLayout()
         self.progress_ring = ProgressRing()
         self.progress_label = QLabel("Today")
@@ -91,7 +95,8 @@ class MainWindow(QMainWindow):
         self.folder_filter = QComboBox()
         self.folder_filter.currentIndexChanged.connect(lambda _i: self.refresh_today())
         today_layout.addWidget(self.folder_filter)
-        self.cards_box = QVBoxLayout()
+        self.cards_box = QGridLayout()
+        self.cards_box.setSpacing(8)
         cards_host = QWidget()
         cards_host.setLayout(self.cards_box)
         self.empty_label = QLabel("No habits yet. Add your first habit.")
@@ -361,7 +366,8 @@ class MainWindow(QMainWindow):
                 folder_color=folder_color,
                 stepper=hd.get("type") == "counter",
             )
-            self.cards_box.addWidget(card)
+            self.cards_box.addWidget(card, len(self.today_cards) // 2,
+                                      len(self.today_cards) % 2)
             self.today_cards.append(card)
         self.progress_ring.set_progress(done_count, len(habits))
         self.progress_label.setText(f"Today — {done_count}/{len(habits)} done")
