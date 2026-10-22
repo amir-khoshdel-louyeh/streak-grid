@@ -18,8 +18,14 @@ Smoke (headless): `QT_QPA_PLATFORM=offscreen timeout 10 python main.py` stays al
 
 ## Exports
 
-- Grid PNG: Grid tab → Export PNG → `~/Pictures/streakgrid-YYYY-MM-DD.png`
-- CSV: Stats tab → Export CSV → `~/Documents/streakgrid-YYYY-MM-DD.csv`
+- Grid PNG: Heatmap section → Export PNG → `~/Pictures/streakgrid-YYYY-MM-DD.png`
+- CSV: Stats section → Export CSV → `~/Documents/streakgrid-YYYY-MM-DD.csv`
+- CSV import: Stats section → Import CSV (matches habits by name, skips unknown)
+
+## Backup (File menu)
+
+- Backup now (`Ctrl+B`) → `~/Documents/streakgrid-backup-*.db`
+- Restore backup → validates the file, then reconnects every view
 
 ## Packaging (S20)
 
