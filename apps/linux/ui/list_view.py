@@ -7,6 +7,7 @@ import sqlite3
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QAbstractScrollArea,
     QLabel,
     QLineEdit,
     QListView,
@@ -26,6 +27,8 @@ from ui.heatmap_widget import HeatmapWidget
 class ListView(QWidget):
     COLS = 2
     ROW_H = 56
+    SCROLL_AFTER = 10  # inner scroll only when habits exceed this
+    MAX_ROWS = 5  # = ceil(10 / 2): fits ten habits exactly
 
     def __init__(self, conn: sqlite3.Connection, parent=None) -> None:
         super().__init__(parent)
@@ -47,6 +50,7 @@ class ListView(QWidget):
         self.list.setResizeMode(QListView.Adjust)
         self.list.setMovement(QListView.Static)
         self.list.setUniformItemSizes(True)
+        self.list.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
         self.list.model().rowsMoved.connect(lambda *a: self._persist_order())
         self.layout.addWidget(self.list)
         self.empty = QLabel("No habits yet.")
@@ -103,6 +107,19 @@ class ListView(QWidget):
             self.list.setItemWidget(item, row)
             self.rows.append(row)
         self._update_grid()
+        self._fit_height()
+
+    def _fit_height(self) -> None:
+        """Show every row with no inner scroll — unless habits exceed 10."""
+        total = len(list_habits(self.conn, include_archived=True))
+        visible = self.list.count()
+        self.list.setVisible(visible > 0)
+        if not visible:
+            return
+        if total > self.SCROLL_AFTER:
+            self.list.setMaximumHeight(self.MAX_ROWS * self.ROW_H + 12)
+        else:
+            self.list.setMaximumHeight(16777215)  # fit all rows, no scroll
 
     def _update_grid(self) -> None:
         """Two equal columns across the available width."""
