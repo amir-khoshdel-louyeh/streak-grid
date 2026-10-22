@@ -91,6 +91,9 @@ class MainWindow(QMainWindow):
         self.progress_label = QLabel("Today")
         header.addWidget(self.progress_ring)
         header.addWidget(self.progress_label, stretch=1)
+        self.today_summary = QLabel("")
+        self.today_summary.setStyleSheet("color: #a9b1d6;")
+        header.addWidget(self.today_summary)
         today_layout.addLayout(header)
         self.folder_filter = QComboBox()
         self.folder_filter.currentIndexChanged.connect(lambda _i: self.refresh_today())
@@ -337,6 +340,8 @@ class MainWindow(QMainWindow):
             habits = [h for h in habits if h["folder_id"] == wanted]
         self.empty_label.setVisible(not habits)
         done_count = 0
+        active_count = 0
+        best_all = 0
         for h in habits:
             hd = dict(h)
             completions = get_completions(self.conn, int(h["id"]))
@@ -348,6 +353,8 @@ class MainWindow(QMainWindow):
             if hd.get("type") == "counter":
                 counter_text = f"{int(completions.get(today_iso, 0))}/{int(hd.get('target_count', 1))}"
             streak = current_streak(hd, completions, pauses, today_iso)
+            best_all = max(best_all, best_streak(hd, completions, pauses, today_iso))
+            active_count += 1 if streak > 0 else 0
             folder_tag = ""
             folder_color = ""
             if hd.get("folder_id") in folders:
@@ -371,6 +378,7 @@ class MainWindow(QMainWindow):
             self.today_cards.append(card)
         self.progress_ring.set_progress(done_count, len(habits))
         self.progress_label.setText(f"Today — {done_count}/{len(habits)} done")
+        self.today_summary.setText(f"🔥 {active_count} active · best {best_all}")
 
     def _on_tap(self, habit_id: int) -> None:
         today_iso = date.today().isoformat()
