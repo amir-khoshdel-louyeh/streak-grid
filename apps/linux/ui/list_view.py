@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractScrollArea,
@@ -47,6 +47,7 @@ class ListView(QWidget):
         self.list.setDefaultDropAction(Qt.MoveAction)
         self.list.setFlow(QListView.LeftToRight)
         self.list.setWrapping(True)
+        self.list.setViewMode(QListView.IconMode)
         self.list.setResizeMode(QListView.Adjust)
         self.list.setMovement(QListView.Static)
         self.list.setUniformItemSizes(True)
@@ -61,6 +62,11 @@ class ListView(QWidget):
         super().resizeEvent(event)
         self._update_grid()
 
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        # layout settles after show; recompute once the real width is known
+        QTimer.singleShot(0, self._update_grid)
+
     def _build_row(self, h: sqlite3.Row, today_iso: str) -> QWidget:
         hd = dict(h)
         completions = get_completions(self.conn, int(h["id"]))
@@ -74,9 +80,9 @@ class ListView(QWidget):
         grip.setToolTip("Drag to reorder")
         archived_tag = "  [archived]" if h["archived"] else ""
         name = QLabel(f"{h['name']}  🔥{cur}  best {best}{archived_tag}")
-        mini = HeatmapWidget(cell=3, gap=2)
-        mini.setFixedHeight(7 * (3 + 2) + 2)
-        mini.setFixedWidth(53 * (3 + 2) + 2)
+        mini = HeatmapWidget(cell=4, gap=2)
+        mini.setFixedHeight(7 * (4 + 2) + 2)
+        mini.setFixedWidth(53 * (4 + 2) + 2)
         mini.set_matrix(
             build_matrix(completions, end_date=today_iso, days=120,
                          target=int(hd.get("target_count", 1) or 1))
@@ -123,7 +129,8 @@ class ListView(QWidget):
 
     def _update_grid(self) -> None:
         """Two equal columns across the available width."""
-        col_w = max(200, self.list.viewport().width() // self.COLS)
+        avail = self.list.width() - 2 * self.list.frameWidth() - 16
+        col_w = max(200, avail // self.COLS)
         self.list.setGridSize(QSize(col_w, self.ROW_H))
 
     def _persist_order(self) -> None:
