@@ -308,6 +308,7 @@ class MainWindow(QMainWindow):
         self.refresh_grid()
         if hasattr(self, "list_view"):
             self.list_view.refresh()
+            self.sections[1].setTitle(f"All habits ({self.list_view.list.count()})")
         if hasattr(self, "stats_view"):
             self.stats_view.refresh()
 
