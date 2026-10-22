@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS habits(
   start_date TEXT NOT NULL,
   created_at TEXT NOT NULL,
   archived INTEGER NOT NULL DEFAULT 0,
-  remind_at TEXT NOT NULL DEFAULT ''
+  remind_at TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -88,6 +89,9 @@ def migrate(conn: sqlite3.Connection) -> None:
     cols = [r[1] for r in conn.execute("PRAGMA table_info(habits)").fetchall()]
     if "remind_at" not in cols:  # N4: upgrade pre-existing DBs (e.g. seeded v1)
         conn.execute("ALTER TABLE habits ADD COLUMN remind_at TEXT NOT NULL DEFAULT ''")
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(habits)").fetchall()]
+    if "sort_order" not in cols:  # D1: drag-reorder upgrade
+        conn.execute("ALTER TABLE habits ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
     conn.commit()
 
 
@@ -126,12 +130,14 @@ def create_habit(
     ):
         raise ValueError(f"bad schedule: {schedule_type!r}")
     now = datetime.now(timezone.utc).isoformat()
+    order = conn.execute("SELECT COALESCE(MAX(sort_order), -1)+1 FROM habits").fetchone()[0]
     cur = conn.execute(
         """INSERT INTO habits(name, folder_id, type, target_count, schedule_type,
-                              schedule_json, start_date, created_at, archived, remind_at)
-           VALUES(?,?,?,?,?,?,?,?,0,?)""",
+                              schedule_json, start_date, created_at, archived, remind_at,
+                              sort_order)
+           VALUES(?,?,?,?,?,?,?,?,0,?,?)""",
         (name, folder_id, habit_type, int(target_count or 1),
-         schedule_type, schedule_json, start_date, now, remind_at),
+         schedule_type, schedule_json, start_date, now, remind_at, int(order)),
     )
     conn.commit()
     return int(cur.lastrowid)
@@ -139,8 +145,8 @@ def create_habit(
 
 def list_habits(conn: sqlite3.Connection, *, include_archived: bool = False) -> list[sqlite3.Row]:
     if include_archived:
-        return list(conn.execute("SELECT * FROM habits ORDER BY id"))
-    return list(conn.execute("SELECT * FROM habits WHERE archived=0 ORDER BY id"))
+        return list(conn.execute("SELECT * FROM habits ORDER BY sort_order, id"))
+    return list(conn.execute("SELECT * FROM habits WHERE archived=0 ORDER BY sort_order, id"))
 
 
 def update_habit(conn: sqlite3.Connection, habit_id: int, **fields) -> None:
@@ -231,6 +237,13 @@ def create_folder(conn: sqlite3.Connection, name: str, color: str = "#888888") -
 
 def list_folders(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return list(conn.execute("SELECT * FROM folders ORDER BY sort_order, id"))
+
+
+def set_habit_order(conn: sqlite3.Connection, ordered_ids: list[int]) -> None:
+    """Persist drag-reorder: first id gets sort_order 0, next 1, ... (D1)."""
+    for position, habit_id in enumerate(ordered_ids):
+        conn.execute("UPDATE habits SET sort_order=? WHERE id=?", (position, habit_id))
+    conn.commit()
 
 
 def set_habit_folder(conn: sqlite3.Connection, habit_id: int, folder_id: int | None) -> None:
