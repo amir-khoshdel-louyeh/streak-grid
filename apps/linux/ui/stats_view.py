@@ -5,7 +5,15 @@ from __future__ import annotations
 import sqlite3
 from datetime import date, timedelta
 
-from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ui.week_chart import WeekChart
 
@@ -27,7 +35,12 @@ class StatsView(QWidget):
         self.layout.addWidget(self.week_chart)
         self.export_button = QPushButton("Export CSV")
         self.export_button.clicked.connect(self._on_export)
-        self.layout.addWidget(self.export_button)
+        self.import_button = QPushButton("Import CSV")
+        self.import_button.clicked.connect(self._on_import)
+        io_row = QHBoxLayout()
+        io_row.addWidget(self.export_button)
+        io_row.addWidget(self.import_button)
+        self.layout.addLayout(io_row)
         self.rows: list[QLabel] = []
 
     def refresh(self, today: str | None = None) -> None:
@@ -128,3 +141,32 @@ class StatsView(QWidget):
     def _on_export(self) -> None:
         path = self.export_csv()
         QMessageBox.information(self, "Exported", f"Saved {path}")
+
+    def import_csv(self, in_path: str) -> dict:
+        from db.store import import_completions_csv
+
+        result = import_completions_csv(self.conn, in_path)
+        self.refresh()
+        return result
+
+    def _on_import(self) -> None:
+        from pathlib import Path
+
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import CSV", str(Path.home()), "CSV (*.csv)")
+        if not path:
+            return
+        try:
+            result = self.import_csv(path)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Import failed", str(exc))
+            return
+        parent = self.parent()
+        while parent is not None and not hasattr(parent, "refresh_all"):
+            parent = parent.parent()
+        if parent is not None:
+            parent.refresh_all()
+        skipped = len(result["skipped"])
+        QMessageBox.information(
+            self, "Imported",
+            f"{result['imported']} rows imported, {skipped} skipped.")
