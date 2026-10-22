@@ -7,6 +7,10 @@ with achievements, tray/nag/widget.
 
 `Ctrl+N` new habit · `Ctrl+1..4` jump to sections · `/` search · `Ctrl+T` theme
 
+## Order
+
+Drag rows in All habits to reorder — Today follows the same order.
+
 ## Run
 
 ```bash
