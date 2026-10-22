@@ -275,3 +275,34 @@ def export_completions_csv(conn: sqlite3.Connection, out_path: str) -> str:
         for r in rows:
             writer.writerow([r["habit"], r["date"], r["value"], r["note"], r["updated_at"]])
     return out_path
+
+
+def import_completions_csv(conn: sqlite3.Connection, in_path: str) -> dict:
+    """Import rows from our CSV export. Matches habits by exact name.
+
+    Unknown habits and malformed rows are skipped (listed in result).
+    Returns {"imported": int, "skipped": [(line, reason)]}.
+    """
+    import csv
+    from datetime import date as _date
+
+    by_name = {r["name"]: int(r["id"]) for r in conn.execute("SELECT id, name FROM habits")}
+    imported = 0
+    skipped: list[tuple[int, str]] = []
+    with open(in_path, newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        for lineno, row in enumerate(reader, start=2):
+            name = (row.get("habit") or "").strip()
+            day = (row.get("date") or "").strip()
+            try:
+                value = int(row.get("value") or 0)
+                _date.fromisoformat(day)
+            except (ValueError, TypeError):
+                skipped.append((lineno, "bad date/value"))
+                continue
+            if name not in by_name:
+                skipped.append((lineno, f"unknown habit {name!r}"))
+                continue
+            log_completion(conn, by_name[name], day, value, row.get("note") or "")
+            imported += 1
+    return {"imported": imported, "skipped": skipped}
