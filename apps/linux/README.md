@@ -3,6 +3,23 @@
 Status: v1 — single scrollable page (Today + All habits + Heatmap + Stats)
 with achievements, tray/nag/widget.
 
+## Features
+
+- **Today** — progress ring, due habits as tappable cards (counter habits step up/down).
+- **All habits** — searchable full-width rows, drag ⋮⋮ to reorder, double-click to
+  open details; each row shows its folder, streak, best, next due date and a
+  full-year mini heatmap.
+- **Heatmap** — one rolling GitHub-style graph aggregated across *all* habits
+  (share of due habits completed each day) with month/weekday axes, a Less–More
+  legend and an active-days / consistency summary; Year or Month view.
+- **Stats** — 30/90/all completion rates, streaks, weighted **strength** score,
+  perfect days and a per-weekday chart.
+- **Folders** (`Habits ▸ Folders…`) — colour-coded categories; pick a habit's folder
+  in the add/edit dialog and filter Today by folder.
+- **Desktop widget** (`View ▸ Desktop widget`) — pin-anywhere, one-tap check-off
+  without opening the main window.
+- **Achievements** — 8 badges; tray quick actions and Nag Mode reminders.
+
 ## Shortcuts
 
 `Ctrl+N` new habit · `Ctrl+1..4` jump to sections · `/` search · `Ctrl+T` theme

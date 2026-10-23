@@ -7,10 +7,12 @@ from datetime import date, timedelta
 
 from PySide6.QtWidgets import (
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -18,7 +20,14 @@ from PySide6.QtWidgets import (
 from ui.week_chart import WeekChart
 
 from core.schedule import is_due
-from core.streak import best_streak, completion_rate, current_streak, is_done, is_paused
+from core.streak import (
+    best_streak,
+    completion_rate,
+    current_streak,
+    is_done,
+    is_paused,
+    strength_score,
+)
 from db.store import export_completions_csv, get_completions, list_habits, list_pauses
 
 
@@ -27,10 +36,16 @@ class StatsView(QWidget):
         super().__init__(parent)
         self.conn = conn
         self.layout = QVBoxLayout(self)
+        self.layout.setSpacing(12)
         self.summary = QLabel("")
+        self.summary.setObjectName("CardTitle")
         self.layout.addWidget(self.summary)
         self.extra = QLabel("")
+        self.extra.setObjectName("MutedText")
         self.layout.addWidget(self.extra)
+        self.rows_host = QVBoxLayout()
+        self.rows_host.setSpacing(8)
+        self.layout.addLayout(self.rows_host)
         self.week_chart = WeekChart()
         self.layout.addWidget(self.week_chart)
         self.export_button = QPushButton("Export CSV")
@@ -38,15 +53,16 @@ class StatsView(QWidget):
         self.import_button = QPushButton("Import CSV")
         self.import_button.clicked.connect(self._on_import)
         io_row = QHBoxLayout()
+        io_row.addStretch(1)
         io_row.addWidget(self.export_button)
         io_row.addWidget(self.import_button)
         self.layout.addLayout(io_row)
-        self.rows: list[QLabel] = []
+        self.rows: list[QFrame] = []
 
     def refresh(self, today: str | None = None) -> None:
         today_iso = today or date.today().isoformat()
         for r in self.rows:
-            self.layout.removeWidget(r)
+            self.rows_host.removeWidget(r)
             r.deleteLater()
         self.rows = []
         habits = list_habits(self.conn)
@@ -54,6 +70,7 @@ class StatsView(QWidget):
             self.summary.setText("No data yet.")
             return
         lines = []
+        strengths: list[float] = []
         for h in habits:
             hd = dict(h)
             completions = get_completions(self.conn, int(h["id"]))
@@ -63,14 +80,30 @@ class StatsView(QWidget):
             rall = completion_rate(hd, completions, pauses, today_iso, days=365 * 3)
             best = best_streak(hd, completions, pauses, today_iso)
             cur = current_streak(hd, completions, pauses, today_iso)
-            lab = QLabel(
-                f"{h['name']}: 30d {r30:.0%} | 90d {r90:.0%} | all {rall:.0%} | "
-                f"streak {cur} | best {best}"
+            strength = strength_score(hd, completions, pauses, today_iso)
+            strengths.append(strength)
+            card = QFrame()
+            card.setProperty("card", True)
+            card_box = QHBoxLayout(card)
+            card_box.setContentsMargins(14, 10, 14, 10)
+            card_box.setSpacing(10)
+            title = QLabel(str(h["name"]))
+            title.setObjectName("CardTitle")
+            title.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+            detail = QLabel(
+                f"30d {r30:.0%}   ·   90d {r90:.0%}   ·   all {rall:.0%}   ·   "
+                f"streak {cur}   ·   best {best}   ·   strength {strength:.0%}"
             )
-            self.layout.addWidget(lab)
-            self.rows.append(lab)
+            detail.setObjectName("CardMeta")
+            card_box.addWidget(title, 1)
+            card_box.addWidget(detail)
+            self.rows_host.addWidget(card)
+            self.rows.append(card)
             lines.append(f"{h['name']} {r30:.2f} {best}")
-        self.summary.setText(f"{len(habits)} habits tracked.")
+        overall = sum(strengths) / len(strengths) if strengths else 0.0
+        self.summary.setText(
+            f"{len(habits)} habits tracked   ·   overall strength {overall:.0%}"
+        )
         self.extra.setText(self._extra_text(today_iso))
         self.week_chart.set_rates(self.weekday_rates(today_iso))
 

@@ -239,6 +239,39 @@ def list_folders(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return list(conn.execute("SELECT * FROM folders ORDER BY sort_order, id"))
 
 
+def update_folder(
+    conn: sqlite3.Connection,
+    folder_id: int,
+    *,
+    name: str | None = None,
+    color: str | None = None,
+) -> None:
+    """Rename / recolour a folder (F1).
+
+    Only the provided fields change; call with neither to no-op.
+    """
+    fields: dict[str, object] = {}
+    if name is not None:
+        name = name.strip()
+        if not name:
+            raise ValueError("folder name is required")
+        fields["name"] = name
+    if color is not None:
+        fields["color"] = color
+    if not fields:
+        return
+    cols = ", ".join(f"{k}=?" for k in fields)
+    conn.execute(f"UPDATE folders SET {cols} WHERE id=?", (*fields.values(), folder_id))
+    conn.commit()
+
+
+def delete_folder(conn: sqlite3.Connection, folder_id: int) -> None:
+    """Delete a folder; member habits keep existing with folder_id set to NULL."""
+    conn.execute("UPDATE habits SET folder_id=NULL WHERE folder_id=?", (folder_id,))
+    conn.execute("DELETE FROM folders WHERE id=?", (folder_id,))
+    conn.commit()
+
+
 def set_habit_order(conn: sqlite3.Connection, ordered_ids: list[int]) -> None:
     """Persist drag-reorder: first id gets sort_order 0, next 1, ... (D1)."""
     for position, habit_id in enumerate(ordered_ids):

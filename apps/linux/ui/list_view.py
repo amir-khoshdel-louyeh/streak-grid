@@ -1,4 +1,4 @@
-"""List view — G1: two-column grid with real drag-reorder (no QListView)."""
+"""List view — G1: full-width rows with drag-reorder and a year mini heatmap."""
 
 from __future__ import annotations
 
@@ -14,29 +14,46 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from core.heatmap import build_matrix
+from core.schedule import is_due, next_due
 from core.streak import best_streak, current_streak
-from db.store import get_completions, list_habits, list_pauses, set_habit_order
+from db.store import get_completions, list_folders, list_habits, list_pauses, set_habit_order
 from ui.heatmap_widget import HeatmapWidget
 
 
-class ListView(QWidget):
-    COLS = 2
-    ROW_H = 64
-    GAP = 8
-    SCROLL_AFTER = 10  # inner scroll only when habits exceed this
-    MAX_ROWS = 5  # = ceil(10 / 2): fits ten habits exactly
+class _HabitRow(QFrame):
+    """Row frame that opens the habit on double-click."""
 
-    def __init__(self, conn: sqlite3.Connection, parent=None) -> None:
+    def __init__(self, on_activate=None, parent=None) -> None:
+        super().__init__(parent)
+        self._on_activate = on_activate
+
+    def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802
+        if self._on_activate is not None:
+            self._on_activate()
+        super().mouseDoubleClickEvent(event)
+
+
+class ListView(QWidget):
+    COLS = 1
+    ROW_H = 72
+    GAP = 8
+
+    def __init__(self, conn: sqlite3.Connection, parent=None, on_open=None) -> None:
         super().__init__(parent)
         self.conn = conn
+        self._on_open = on_open
         self.layout = QVBoxLayout(self)
+        self.layout.setSpacing(10)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Search habits… (drag ⋮⋮ to reorder)")
+        self.search.setPlaceholderText(
+            "Search habits…    drag ⋮⋮ to reorder  ·  double-click to open"
+        )
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(lambda _t: self.refresh())
         self.layout.addWidget(self.search)
@@ -44,6 +61,7 @@ class ListView(QWidget):
         self.area.setWidgetResizable(True)
         self.area.setFrameShape(QFrame.NoFrame)
         self.area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.area.viewport().setAcceptDrops(True)
         self.area.viewport().installEventFilter(self)
         self.host = QWidget()
@@ -51,13 +69,15 @@ class ListView(QWidget):
         self.grid.setSpacing(self.GAP)
         self.grid.setContentsMargins(0, 0, 0, 0)
         self.grid.setColumnStretch(0, 1)
-        self.grid.setColumnStretch(1, 1)
         self.area.setWidget(self.host)
         self.layout.addWidget(self.area)
         self.empty = QLabel("No habits yet.")
+        self.empty.setObjectName("EmptyState")
         self.layout.addWidget(self.empty)
         self._order: list[int] = []
+        self._visible: list[int] = []
         self._rows: dict[int, QFrame] = {}
+        self._folders: dict[int, dict] = {}
         self._press: tuple[int, QPoint] | None = None
 
     # -- rows ------------------------------------------------------------
@@ -67,25 +87,64 @@ class ListView(QWidget):
         pauses = [(p["start_date"], p["end_date"]) for p in list_pauses(self.conn, int(h["id"]))]
         cur = current_streak(hd, completions, pauses, today_iso)
         best = best_streak(hd, completions, pauses, today_iso)
-        row = QFrame()
-        row.setFrameShape(QFrame.StyledPanel)
+        target = int(hd.get("target_count", 1) or 1)
+
+        row = _HabitRow(on_activate=self._activate_for(int(h["id"])))
+        row.setProperty("card", True)
         row.setFixedHeight(self.ROW_H)
         box = QHBoxLayout(row)
-        box.setContentsMargins(8, 4, 8, 4)
+        box.setContentsMargins(14, 11, 14, 11)
+        box.setSpacing(12)
+
         grip = QLabel("⋮⋮")
+        grip.setObjectName("MutedText")
         grip.setCursor(Qt.OpenHandCursor)
         grip.setToolTip("Drag to reorder")
         grip.setProperty("habit_id", int(h["id"]))
         grip.installEventFilter(self)
-        archived_tag = "  [archived]" if h["archived"] else ""
-        name = QLabel(f"{h['name']}  🔥{cur}  best {best}{archived_tag}")
+
+        text = QVBoxLayout()
+        text.setSpacing(2)
+        name = QLabel(str(h["name"]))
+        name.setObjectName("CardTitle")
+        name.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        name.setToolTip(str(h["name"]))
+        meta = QLabel()
+        meta.setObjectName("CardMeta")
+        meta.setTextFormat(Qt.RichText)
+        parts: list[str] = []
+        folder = self._folders.get(int(hd.get("folder_id") or -1))
+        if folder:
+            parts.append(f'<font color="{folder["color"]}">●</font> {folder["name"]}')
+        if cur > 0:
+            parts.append(f"🔥 {cur}")
+        parts.append(f"best {best}")
+        if not is_due(hd, today_iso):
+            upcoming = next_due(hd, today_iso)
+            if upcoming is not None:
+                parts.append(f"next {upcoming.strftime('%a %d %b')}")
+        if h["archived"]:
+            parts.append("archived")
+        meta.setText("   ·   ".join(parts))
+        text.addWidget(name)
+        text.addWidget(meta)
+
         mini = HeatmapWidget(cell=6, gap=1)
-        mini.setFixedHeight(7 * (6 + 1) + 1)
-        mini.setFixedWidth(53 * (6 + 1) + 1)
+        mini.set_matrix(build_matrix(
+            completions, end_date=today_iso, days=365, target=target
+        ))
+        mini.setFixedSize(mini.sizeHint())
+
         box.addWidget(grip)
-        box.addWidget(name, stretch=1)
+        box.addLayout(text, 1)
         box.addWidget(mini)
         return row
+
+    def _activate_for(self, habit_id: int):
+        def activate() -> None:
+            if self._on_open is not None:
+                self._on_open(habit_id)
+        return activate
 
     def refresh(self, today: str | None = None) -> None:
         from datetime import date
@@ -94,6 +153,7 @@ class ListView(QWidget):
         for w in self._rows.values():
             w.deleteLater()
         self._rows = {}
+        self._folders = {int(f["id"]): dict(f) for f in list_folders(self.conn)}
         self._order = [int(h["id"]) for h in list_habits(self.conn, include_archived=True)]
         query = self.search.text().strip().lower()
         self._visible = [hid for hid in self._order
@@ -125,20 +185,15 @@ class ListView(QWidget):
             self.grid.addWidget(self._rows[hid], i // self.COLS, i % self.COLS)
 
     def _fit_height(self) -> None:
+        """Grow with the content and let the page's outer scroll handle it."""
         rows = (len(self._visible) + self.COLS - 1) // self.COLS
-        total = len(self._order)
         self.area.setVisible(bool(self._visible))
         if not self._visible:
             return
-        if total > self.SCROLL_AFTER:
-            capped = self.MAX_ROWS * self.ROW_H + (self.MAX_ROWS - 1) * self.GAP
-            self.area.setMinimumHeight(capped)
-            self.area.setMaximumHeight(capped)
-        else:
-            content = rows * self.ROW_H + max(0, rows - 1) * self.GAP
-            self.area.setMinimumHeight(content)
-            self.area.setMaximumHeight(content)
-        self.area.updateGeometry()  # force scrollbar range refresh on re-layout
+        content = rows * self.ROW_H + max(0, rows - 1) * self.GAP
+        self.area.setMinimumHeight(content)
+        self.area.setMaximumHeight(content)
+        self.area.updateGeometry()
 
     # -- drag & drop ------------------------------------------------------
     def eventFilter(self, obj, event) -> bool:  # noqa: N802

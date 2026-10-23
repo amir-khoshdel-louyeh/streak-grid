@@ -154,3 +154,39 @@ def completion_rate(
                 done += 1
         d += timedelta(days=1)
     return (done / total) if total else 0.0
+
+
+def strength_score(
+    habit: Mapping[str, Any],
+    completions: Mapping[str, int],
+    pauses: Sequence[Any] | None = None,
+    today: DateLike | None = None,
+    days: int = 30,
+) -> float:
+    """SPEC §6: weighted mean of completion over the last `days`.
+
+    Today weighs 1.0, decaying linearly to 0.3 at the far end of the window,
+    so recent consistency matters more. Unscheduled / paused days and days
+    before `start_date` are excluded from the denominator.
+    """
+    from .schedule import is_due
+
+    pauses = pauses or []
+    end = _to_date(today) if today is not None else date.today()
+    start_raw = _habit_get(habit, "start_date")
+    habit_start = _to_date(start_raw) if start_raw else end - timedelta(days=days)
+    numerator = denominator = 0.0
+    d = end
+    floor = end - timedelta(days=days - 1)
+    while d >= floor:
+        if d < habit_start or not is_due(habit, d) or is_paused(pauses, d):
+            d -= timedelta(days=1)
+            continue
+        age = (end - d).days
+        weight = 1.0 - 0.7 * (age / days)
+        iso = d.isoformat()
+        denominator += weight
+        if is_done(habit, completions.get(iso), iso in completions):
+            numerator += weight
+        d -= timedelta(days=1)
+    return (numerator / denominator) if denominator else 0.0

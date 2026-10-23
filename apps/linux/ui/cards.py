@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+)
 
 
 class HabitCard(QFrame):
@@ -33,38 +41,83 @@ class HabitCard(QFrame):
         self._streak_active = streak_active
         self._folder_tag = folder_tag
         self._folder_color = folder_color
-        self.setFrameShape(QFrame.StyledPanel)
+        self._done = bool(done)
+        self.dec_button: QPushButton | None = None
+
+        self.setProperty("card", True)
+        self.setMinimumHeight(70)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(10)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(2)
         self.name_label = QLabel()
-        self.name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.name_label.setObjectName("CardTitle")
+        self.name_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.name_label.setToolTip(str(name))
+        self.meta_label = QLabel()
+        self.meta_label.setObjectName("CardMeta")
+        text_col.addWidget(self.name_label)
+        text_col.addWidget(self.meta_label)
+        layout.addLayout(text_col, 1)
+
         self.detail_button = QPushButton("📅")
-        self.detail_button.setFixedSize(36, 36)
+        self.detail_button.setObjectName("IconButton")
+        self.detail_button.setFixedSize(34, 34)
+        self.detail_button.setCursor(Qt.PointingHandCursor)
+        self.detail_button.setToolTip("Open habit details")
         self.detail_button.clicked.connect(self._handle_open)
-        layout.addWidget(self.name_label)
         layout.addWidget(self.detail_button)
+
         if stepper:
             self.dec_button = QPushButton("−")
-            self.dec_button.setFixedSize(36, 36)
+            self.dec_button.setObjectName("IconButton")
+            self.dec_button.setFixedSize(34, 34)
+            self.dec_button.setCursor(Qt.PointingHandCursor)
+            self.dec_button.setToolTip("Decrease today's count")
             self.dec_button.clicked.connect(self._handle_decrement)
             layout.addWidget(self.dec_button)
-        self.tap_button = QPushButton("●" if done else "○")
+
+        self.tap_button = QPushButton()
+        self.tap_button.setObjectName("CheckButton")
         self.tap_button.setFixedSize(40, 40)
-        self.tap_button.setStyleSheet("font-size: 20px; border-radius: 20px;")
+        self.tap_button.setCursor(Qt.PointingHandCursor)
         self.tap_button.clicked.connect(self._handle_tap)
         layout.addWidget(self.tap_button)
+
         self._render_name()
+        self._apply_state()
 
+    # -- rendering ------------------------------------------------------
     def _render_name(self) -> None:
-        from PySide6.QtCore import Qt as _Qt
+        self.name_label.setText(self._base_name)
+        parts: list[str] = []
+        if self._streak_active:
+            parts.append("🔥 active streak")
+        if self._counter_text:
+            parts.append(self._counter_text)
+        if self._folder_tag:
+            dot = (f'<font color="{self._folder_color}">●</font> '
+                   if self._folder_color else "● ")
+            parts.append(f"{dot}{self._folder_tag}")
+        self.meta_label.setTextFormat(Qt.RichText)
+        self.meta_label.setText("   ·   ".join(parts))
+        self.meta_label.setVisible(bool(parts))
 
-        prefix = "🔥 " if self._streak_active else ""
-        suffix = f"  {self._counter_text}" if self._counter_text else ""
-        folder = f" [{self._folder_tag}]" if self._folder_tag else ""
-        dot = f'<font color="{self._folder_color}">●</font> ' if self._folder_color else ""
-        self.name_label.setTextFormat(_Qt.RichText)
-        self.name_label.setText(f"{dot}{prefix}{self._base_name}{suffix}{folder}")
+    def _apply_state(self) -> None:
+        self.tap_button.setText("✓" if self._done else "○")
+        self.tap_button.setToolTip("Done today" if self._done else "Mark done for today")
+        self.tap_button.setProperty("state", "done" if self._done else "todo")
+        self.setProperty("done", self._done)
+        for widget in (self.tap_button, self):
+            style = widget.style()
+            style.unpolish(widget)
+            style.polish(widget)
 
+    # -- actions --------------------------------------------------------
     def _handle_tap(self) -> None:
         if self._on_tap is not None:
             self._on_tap(self.habit_id)
@@ -77,8 +130,10 @@ class HabitCard(QFrame):
         if self._on_decrement is not None:
             self._on_decrement(self.habit_id)
 
+    # -- setters --------------------------------------------------------
     def set_done(self, done: bool) -> None:
-        self.tap_button.setText("●" if done else "○")
+        self._done = bool(done)
+        self._apply_state()
 
     def set_counter(self, text: str) -> None:
         self._counter_text = text

@@ -43,7 +43,7 @@ class DetailDialog(QDialog):
 
         self.streak_label = QLabel("")
         layout.addWidget(self.streak_label)
-        self.history_heatmap = HeatmapWidget(cell=12, gap=2)
+        self.history_heatmap = HeatmapWidget(cell=16, gap=2)
         layout.addWidget(self.history_heatmap)
 
         self.calendar = QCalendarWidget()
@@ -182,7 +182,7 @@ class DetailDialog(QDialog):
         self.archive_button.setText("Unarchive" if archived else "Archive")
 
     def edit_habit(self) -> None:
-        dlg = AddHabitDialog(self)
+        dlg = AddHabitDialog(self, self.conn)
         dlg.set_values(self.habit)
         if dlg.exec():
             try:
@@ -197,6 +197,7 @@ class DetailDialog(QDialog):
                 schedule_type=vals["schedule_type"],
                 schedule_json=vals["schedule_json"],
                 remind_at=vals["remind_at"],
+                folder_id=vals["folder_id"],
             )
             self._reload_habit()
             self._highlight_days()

@@ -13,7 +13,20 @@ class ProgressRing(QWidget):
         self._done = 0
         self._total = 0
         self._size = size
+        self._track = QColor("#2c3145")
+        self._fill = QColor("#7aa2f7")
+        self._text = QColor("#c0caf5")
         self.setFixedSize(size, size)
+        self.refresh_theme()
+
+    def refresh_theme(self) -> None:
+        from ui.theme import chart_colors
+
+        colors = chart_colors()
+        self._track = QColor(colors["ring_track"])
+        self._fill = QColor(colors["ring_fill"])
+        self._text = QColor(colors["ring_text"])
+        self.update()
 
     def set_progress(self, done: int, total: int) -> None:
         self._done = max(0, int(done))
@@ -33,16 +46,16 @@ class ProgressRing(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         margin = 8
         rect = self.rect().adjusted(margin, margin, -margin, -margin)
-        track = QPen(QColor("#414868"), 9)
+        track = QPen(self._track, 9)
         track.setCapStyle(Qt.RoundCap)
         painter.setPen(track)
         painter.drawEllipse(rect)
         if self._total > 0:
-            done_pen = QPen(QColor("#7aa2f7"), 9)
+            done_pen = QPen(self._fill, 9)
             done_pen.setCapStyle(Qt.RoundCap)
             painter.setPen(done_pen)
             painter.drawArc(rect, 90 * 16, -int(self.fraction() * 360 * 16))
-        painter.setPen(QColor("#c0caf5"))
+        painter.setPen(self._text)
         painter.setFont(QFont("Sans", 11, QFont.Bold))
         painter.drawText(self.rect(), Qt.AlignCenter, f"{self._done}/{self._total}")
         painter.end()

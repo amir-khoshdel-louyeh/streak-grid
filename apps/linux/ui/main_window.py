@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
+    QFrame,
     QGroupBox,
     QGridLayout,
     QHBoxLayout,
@@ -45,11 +47,13 @@ from ui.achievements_dialog import AchievementsDialog
 from ui.add_dialog import AddHabitDialog
 from ui.cards import HabitCard
 from ui.detail_dialog import DetailDialog
+from ui.folders_dialog import FoldersDialog
 from ui.heatmap_widget import HeatmapWidget
 from ui.list_view import ListView
 from ui.progress_ring import ProgressRing
 from ui.stats_view import StatsView
 from ui.theme import apply_theme, is_dark, set_dark
+from widgets.desktop_widget import DesktopWidget
 
 
 class MainWindow(QMainWindow):
@@ -57,19 +61,12 @@ class MainWindow(QMainWindow):
                  db_path: str | None = None) -> None:
         super().__init__()
         self.setWindowTitle("StreakGrid")
-        self.resize(900, 600)
+        self.resize(1040, 720)
+        self.setMinimumSize(760, 560)
         from db.store import DEFAULT_DB_PATH
 
         self.conn = conn or init_db()
         self.db_path = db_path or (DEFAULT_DB_PATH if conn is None else None)
-
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        page = QWidget()
-        page_layout = QVBoxLayout(page)
-        page_layout.setSpacing(10)
-        page_layout.setContentsMargins(12, 12, 12, 12)
-        self.sections: list[QGroupBox] = []
 
         file_menu = self.menuBar().addMenu("File")
         self.backup_action = file_menu.addAction("Backup now…")
@@ -77,87 +74,46 @@ class MainWindow(QMainWindow):
         self.backup_action.triggered.connect(self._on_backup)
         self.restore_action = file_menu.addAction("Restore backup…")
         self.restore_action.triggered.connect(self._on_restore)
+        habits_menu = self.menuBar().addMenu("Habits")
+        self.new_action = habits_menu.addAction("New habit…  (Ctrl+N)")
+        self.new_action.triggered.connect(self._on_add)
+        self.folders_action = habits_menu.addAction("Folders…")
+        self.folders_action.triggered.connect(self._on_manage_folders)
         view_menu = self.menuBar().addMenu("View")
         self.theme_action = view_menu.addAction("Toggle theme")
         self.theme_action.setShortcut("Ctrl+T")
         self.theme_action.triggered.connect(self._on_toggle_theme)
+        self.widget_action = view_menu.addAction("Desktop widget")
+        self.widget_action.setCheckable(True)
+        self.widget_action.setChecked(True)
+        self.widget_action.triggered.connect(self._toggle_widget)
         self._setup_shortcuts()
 
-        today_section = QGroupBox("Today")
-        today_layout = QVBoxLayout(today_section)
-        today_layout.setSpacing(8)
-        header = QHBoxLayout()
-        self.progress_ring = ProgressRing()
-        self.progress_label = QLabel("Today")
-        header.addWidget(self.progress_ring)
-        header.addWidget(self.progress_label, stretch=1)
-        self.today_summary = QLabel("")
-        self.today_summary.setStyleSheet("color: #a9b1d6;")
-        header.addWidget(self.today_summary)
-        today_layout.addLayout(header)
-        top_row = QHBoxLayout()
-        self.folder_filter = QComboBox()
-        self.folder_filter.currentIndexChanged.connect(lambda _i: self.refresh_today())
-        self.add_button = QPushButton("Add habit")
-        self.add_button.clicked.connect(self._on_add)
-        self.achv_button = QPushButton("🏆 Achievements")
-        self.achv_button.clicked.connect(self._on_show_achievements)
-        top_row.addWidget(self.folder_filter, stretch=1)
-        top_row.addWidget(self.add_button)
-        top_row.addWidget(self.achv_button)
-        today_layout.addLayout(top_row)
-        self.cards_box = QGridLayout()
-        self.cards_box.setSpacing(8)
-        cards_host = QWidget()
-        cards_host.setLayout(self.cards_box)
-        self.empty_label = QLabel("No habits yet. Add your first habit.")
-        today_layout.addWidget(cards_host)
-        today_layout.addWidget(self.empty_label)
-        self.today_cards: list[HabitCard] = []
-        page_layout.addWidget(today_section)
-        self.sections.append(today_section)
-        self.list_view = ListView(self.conn)
-        list_section = QGroupBox("All habits")
-        list_section.setLayout(QVBoxLayout())
-        list_section.layout().addWidget(self.list_view)
-        page_layout.addWidget(list_section)
-        self.sections.append(list_section)
-        grid_section = QGroupBox("Heatmap")
-        grid_layout = QVBoxLayout(grid_section)
-        self.grid_selector = QComboBox()
-        self.grid_selector.currentIndexChanged.connect(lambda _i: self.refresh_grid())
-        mode_row = QHBoxLayout()
-        self.grid_mode = QComboBox()
-        self.grid_mode.addItems(["Year", "Month"])
-        self.grid_mode.currentIndexChanged.connect(lambda _i: self.refresh_grid())
-        self.month_prev = QPushButton("◀")
-        self.month_prev.clicked.connect(lambda: self._shift_month(-1))
-        self.month_next = QPushButton("▶")
-        self.month_next.clicked.connect(lambda: self._shift_month(1))
-        self.month_label = QLabel("")
-        mode_row.addWidget(self.grid_mode)
-        mode_row.addWidget(self.month_prev)
-        mode_row.addWidget(self.month_label)
-        mode_row.addWidget(self.month_next)
-        mode_row.addStretch(1)
-        self.grid_heatmap = HeatmapWidget(cell=21, gap=3)
-        self.export_button = QPushButton("Export PNG")
-        self.export_button.clicked.connect(self._on_export_grid)
-        grid_layout.addWidget(self.grid_selector)
-        grid_layout.addLayout(mode_row)
-        grid_layout.addWidget(self.grid_heatmap)
-        grid_layout.addWidget(self.export_button)
-        page_layout.addWidget(grid_section)
-        self.sections.append(grid_section)
-        self.stats_view = StatsView(self.conn)
-        stats_section = QGroupBox("Stats")
-        stats_section.setLayout(QVBoxLayout())
-        stats_section.layout().addWidget(self.stats_view)
-        page_layout.addWidget(stats_section)
-        self.sections.append(stats_section)
+        central = QWidget()
+        central_layout = QVBoxLayout(central)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
+        central_layout.addWidget(self._build_header())
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        page = QWidget()
+        page.setObjectName("Page")
+        page_layout = QVBoxLayout(page)
+        page_layout.setSpacing(10)
+        page_layout.setContentsMargins(22, 18, 22, 26)
+        self.sections: list[QGroupBox] = []
+
+        page_layout.addWidget(self._build_today_section())
+        page_layout.addWidget(self._build_list_section())
+        page_layout.addWidget(self._build_grid_section())
+        page_layout.addWidget(self._build_stats_section())
         page_layout.addStretch(1)
+
         self.scroll.setWidget(page)
-        self.setCentralWidget(self.scroll)
+        central_layout.addWidget(self.scroll, 1)
+        self.setCentralWidget(central)
         self._folder_ids: list[int | None] = [None]
         self.refresh_folders()
         self.tray = create_tray(self, on_show=self._show_from_tray, on_quit=self._quit_from_tray)
@@ -181,7 +137,216 @@ class MainWindow(QMainWindow):
             on_tick=lambda pending: set_alert(self.tray, bool(pending)),
         )
         self.nag.start()
+
+        self.desktop_widget = DesktopWidget(
+            self.conn, on_check=self._on_widget_check, parent=self
+        )
+        self.desktop_widget.start_auto_refresh(60)
+        if self.desktop_widget._settings().value("pos") is None:
+            screen = QApplication.primaryScreen()
+            if screen is not None:
+                area = screen.availableGeometry()
+                self.desktop_widget.move(area.right() - 320, area.bottom() - 220)
+        self.desktop_widget.show()
         self.refresh_all()
+
+    # -- layout builders (presentation only, no behaviour) ---------------
+    def _build_header(self) -> QFrame:
+        from PySide6.QtCore import Qt
+
+        from services.tray import make_icon
+
+        header = QFrame()
+        header.setObjectName("AppHeader")
+        header.setFixedHeight(64)
+        row = QHBoxLayout(header)
+        row.setContentsMargins(22, 10, 22, 10)
+        row.setSpacing(12)
+
+        logo = QLabel()
+        logo.setPixmap(make_icon().pixmap(34, 34))
+        logo.setFixedSize(34, 34)
+        row.addWidget(logo)
+
+        titles = QVBoxLayout()
+        titles.setSpacing(0)
+        title = QLabel("StreakGrid")
+        title.setObjectName("AppTitle")
+        subtitle = QLabel("Build habits that stick")
+        subtitle.setObjectName("AppSubtitle")
+        titles.addWidget(title)
+        titles.addWidget(subtitle)
+        row.addLayout(titles)
+        row.addStretch(1)
+
+        self.theme_button = QPushButton("🌙" if is_dark() else "☀️")
+        self.theme_button.setProperty("role", "ghost")
+        self.theme_button.setFixedWidth(46)
+        self.theme_button.setCursor(Qt.PointingHandCursor)
+        self.theme_button.setToolTip("Toggle light / dark theme  (Ctrl+T)")
+        self.theme_button.clicked.connect(self._on_toggle_theme)
+        self.achv_button = QPushButton("🏆  Achievements")
+        self.achv_button.setProperty("role", "ghost")
+        self.achv_button.setCursor(Qt.PointingHandCursor)
+        self.achv_button.clicked.connect(self._on_show_achievements)
+        self.add_button = QPushButton("＋  New habit")
+        self.add_button.setProperty("role", "primary")
+        self.add_button.setCursor(Qt.PointingHandCursor)
+        self.add_button.setToolTip("Create a habit  (Ctrl+N)")
+        self.add_button.clicked.connect(self._on_add)
+
+        row.addWidget(self.theme_button)
+        row.addWidget(self.achv_button)
+        row.addWidget(self.add_button)
+        return header
+
+    def _build_today_section(self) -> QGroupBox:
+        from PySide6.QtCore import Qt
+
+        section = QGroupBox("Today")
+        self.sections.append(section)
+        layout = QVBoxLayout(section)
+        layout.setSpacing(16)
+
+        hero = QHBoxLayout()
+        hero.setSpacing(18)
+        self.progress_ring = ProgressRing()
+        hero.addWidget(self.progress_ring, 0, Qt.AlignVCenter)
+        info = QVBoxLayout()
+        info.setSpacing(4)
+        self.progress_label = QLabel("Today")
+        self.progress_label.setObjectName("HeroTitle")
+        self.today_summary = QLabel("")
+        self.today_summary.setObjectName("MutedText")
+        info.addStretch(1)
+        info.addWidget(self.progress_label)
+        info.addWidget(self.today_summary)
+        info.addStretch(1)
+        hero.addLayout(info)
+        hero.addStretch(1)
+        self.date_label = QLabel(date.today().strftime("%A, %d %b"))
+        self.date_label.setObjectName("DateLabel")
+        hero.addWidget(self.date_label, 0, Qt.AlignTop | Qt.AlignRight)
+        layout.addLayout(hero)
+
+        filters = QHBoxLayout()
+        filters.setSpacing(10)
+        caption = QLabel("Folder")
+        caption.setObjectName("MutedText")
+        self.folder_filter = QComboBox()
+        self.folder_filter.setMinimumWidth(220)
+        self.folder_filter.currentIndexChanged.connect(lambda _i: self.refresh_today())
+        filters.addWidget(caption)
+        filters.addWidget(self.folder_filter)
+        filters.addStretch(1)
+        layout.addLayout(filters)
+
+        self.cards_box = QGridLayout()
+        self.cards_box.setSpacing(12)
+        self.cards_box.setColumnStretch(0, 1)
+        self.cards_box.setColumnStretch(1, 1)
+        cards_host = QWidget()
+        cards_host.setLayout(self.cards_box)
+        layout.addWidget(cards_host)
+        self.empty_label = QLabel("No habits yet — add your first habit to get started.")
+        self.empty_label.setObjectName("EmptyState")
+        self.empty_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.empty_label)
+        self.today_cards: list[HabitCard] = []
+        return section
+
+    def _build_list_section(self) -> QGroupBox:
+        section = QGroupBox("All habits")
+        self.sections.append(section)
+        layout = QVBoxLayout(section)
+        layout.setSpacing(10)
+        self.list_view = ListView(self.conn, on_open=self._on_open_detail)
+        layout.addWidget(self.list_view)
+        return section
+
+    def _build_grid_section(self) -> QGroupBox:
+        from PySide6.QtCore import Qt
+
+        section = QGroupBox("Heatmap")
+        self.sections.append(section)
+        layout = QVBoxLayout(section)
+        layout.setSpacing(14)
+
+        top = QHBoxLayout()
+        top.setSpacing(10)
+        self.grid_title = QLabel("All habits combined")
+        self.grid_title.setObjectName("CardTitle")
+        view = QLabel("View")
+        view.setObjectName("MutedText")
+        self.grid_mode = QComboBox()
+        self.grid_mode.addItems(["Year", "Month"])
+        self.grid_mode.setFixedWidth(110)
+        self.grid_mode.currentIndexChanged.connect(lambda _i: self.refresh_grid())
+        top.addWidget(self.grid_title)
+        top.addStretch(1)
+        top.addWidget(view)
+        top.addWidget(self.grid_mode)
+        layout.addLayout(top)
+
+        summary_row = QHBoxLayout()
+        summary_row.setSpacing(8)
+        self.heatmap_summary = QLabel("")
+        self.heatmap_summary.setObjectName("MutedText")
+        self.month_prev = QPushButton("◀")
+        self.month_prev.setObjectName("IconButton")
+        self.month_prev.setFixedSize(32, 32)
+        self.month_prev.setCursor(Qt.PointingHandCursor)
+        self.month_prev.setToolTip("Previous month")
+        self.month_prev.clicked.connect(lambda: self._shift_month(-1))
+        self.month_label = QLabel("")
+        self.month_label.setObjectName("DateLabel")
+        self.month_label.setMinimumWidth(140)
+        self.month_next = QPushButton("▶")
+        self.month_next.setObjectName("IconButton")
+        self.month_next.setFixedSize(32, 32)
+        self.month_next.setCursor(Qt.PointingHandCursor)
+        self.month_next.setToolTip("Next month")
+        self.month_next.clicked.connect(lambda: self._shift_month(1))
+        summary_row.addWidget(self.heatmap_summary)
+        summary_row.addStretch(1)
+        summary_row.addWidget(self.month_prev)
+        summary_row.addWidget(self.month_label)
+        summary_row.addWidget(self.month_next)
+        layout.addLayout(summary_row)
+
+        self.grid_heatmap = HeatmapWidget(cell=15, gap=3, responsive=True, axis=True)
+        layout.addWidget(self.grid_heatmap)
+
+        footer = QHBoxLayout()
+        footer.setSpacing(5)
+        less = QLabel("Less")
+        less.setObjectName("MutedText")
+        footer.addWidget(less)
+        self._legend_swatches: list[QLabel] = []
+        for _ in range(5):
+            swatch = QLabel()
+            swatch.setFixedSize(12, 12)
+            self._legend_swatches.append(swatch)
+            footer.addWidget(swatch)
+        more = QLabel("More")
+        more.setObjectName("MutedText")
+        footer.addWidget(more)
+        footer.addStretch(1)
+        self.export_button = QPushButton("Export PNG")
+        self.export_button.setCursor(Qt.PointingHandCursor)
+        self.export_button.clicked.connect(self._on_export_grid)
+        footer.addWidget(self.export_button)
+        layout.addLayout(footer)
+        return section
+
+    def _build_stats_section(self) -> QGroupBox:
+        section = QGroupBox("Stats")
+        self.sections.append(section)
+        layout = QVBoxLayout(section)
+        layout.setSpacing(12)
+        self.stats_view = StatsView(self.conn)
+        layout.addWidget(self.stats_view)
+        return section
 
     def _on_backup(self) -> None:
         from PySide6.QtWidgets import QFileDialog
@@ -235,6 +400,8 @@ class MainWindow(QMainWindow):
         self.list_view.conn = new_conn
         self.stats_view.conn = new_conn
         self.nag.conn = new_conn
+        if getattr(self, "desktop_widget", None) is not None:
+            self.desktop_widget.conn = new_conn
         self.refresh_folders()
         self.refresh_all()
         QMessageBox.information(self, "Restore", "Backup restored.")
@@ -278,6 +445,21 @@ class MainWindow(QMainWindow):
 
         set_dark(not is_dark())
         apply_theme(QApplication.instance())
+        if hasattr(self, "theme_button"):
+            self.theme_button.setText("🌙" if is_dark() else "☀️")
+        self._refresh_painted_theme()
+        self.refresh_all()
+
+    def _refresh_painted_theme(self) -> None:
+        """Re-colour manually painted widgets for the active theme."""
+        for widget in (getattr(self, "progress_ring", None),
+                       getattr(self, "grid_heatmap", None)):
+            if widget is not None and hasattr(widget, "refresh_theme"):
+                widget.refresh_theme()
+        chart = getattr(getattr(self, "stats_view", None), "week_chart", None)
+        if chart is not None:
+            chart.refresh_theme()
+        self._update_heatmap_legend()
 
     def _on_tray_done(self) -> None:
         """Complete first due-undone habit today (tray quick action)."""
@@ -311,6 +493,9 @@ class MainWindow(QMainWindow):
             self.sections[1].setTitle(f"All habits ({self.list_view.count})")
         if hasattr(self, "stats_view"):
             self.stats_view.refresh()
+        widget = getattr(self, "desktop_widget", None)
+        if widget is not None:
+            widget.refresh()
 
     def refresh_folders(self) -> None:
         current = self.folder_filter.currentData() if hasattr(self, "folder_filter") else None
@@ -333,6 +518,8 @@ class MainWindow(QMainWindow):
 
     def refresh_today(self, today: str | None = None) -> None:
         today_iso = today or date.today().isoformat()
+        if hasattr(self, "date_label"):
+            self.date_label.setText(date.fromisoformat(today_iso).strftime("%A, %d %b"))
         self._clear_cards()
         wanted = self.folder_filter.currentData() if hasattr(self, "folder_filter") else None
         folders = {int(f["id"]): dict(f) for f in list_folders(self.conn)}
@@ -411,45 +598,113 @@ class MainWindow(QMainWindow):
         self.refresh_all()
         self.check_achievements(show_banner=True)
 
+    def _combined_heatmap(
+        self, start: date, end: date
+    ) -> tuple[dict[str, int], int, int]:
+        """Per-day intensity across every habit: share of due habits done.
+
+        Values are 0-100 so `build_matrix(..., target=100)` maps each day onto
+        the standard 0-4 scale. Days where nothing was due, or nothing was
+        done, are omitted (they render as empty cells). Also returns the
+        window totals `(done, due)` for the summary line.
+        """
+        tracked = []
+        for h in list_habits(self.conn):
+            hd = dict(h)
+            tracked.append((
+                hd,
+                get_completions(self.conn, int(h["id"])),
+                [(p["start_date"], p["end_date"])
+                 for p in list_pauses(self.conn, int(h["id"]))],
+            ))
+        values: dict[str, int] = {}
+        done_total = due_total = 0
+        day = start
+        while day <= end:
+            iso = day.isoformat()
+            due = done = 0
+            for hd, completions, pauses in tracked:
+                if not is_due(hd, day) or is_paused(pauses, day):
+                    continue
+                due += 1
+                if is_done(hd, completions.get(iso), iso in completions):
+                    done += 1
+            if due and done:
+                values[iso] = max(1, int(round(done / due * 100)))
+            done_total += done
+            due_total += due
+            day += timedelta(days=1)
+        return values, done_total, due_total
+
+    def _year_month_marks(self, end: date) -> list[tuple[int, str]]:
+        """(column, month abbrev) where each month starts, for the year axis."""
+        import calendar as _cal
+
+        end_monday = end - timedelta(days=end.weekday())
+        marks: list[tuple[int, str]] = []
+        seen_month = None
+        last_col = -10
+        for col in range(53):
+            monday = end_monday - timedelta(days=(52 - col) * 7)
+            if monday.month != seen_month and col - last_col >= 3:
+                marks.append((col, _cal.month_abbr[monday.month]))
+                seen_month = monday.month
+                last_col = col
+        return marks
+
+    def _update_heatmap_legend(self) -> None:
+        from ui.theme import chart_colors
+
+        swatches = getattr(self, "_legend_swatches", [])
+        for swatch, color in zip(swatches, chart_colors()["heatmap"]):
+            swatch.setStyleSheet(f"background: {color}; border-radius: 3px;")
+
+    def _set_heatmap_summary(self, active: int, done: int, due: int) -> None:
+        consistency = (done / due) if due else 0.0
+        self.heatmap_summary.setText(
+            f"{active} active days   ·   {done}/{due} due completed   ·   "
+            f"{consistency:.0%} consistency"
+        )
+
     def refresh_grid(self, today: str | None = None) -> None:
-        """S14 + parity: yearly rolling grid or monthly grid for selected habit."""
+        """Heatmap aggregated across all habits (year or month view)."""
         today_iso = today or date.today().isoformat()
-        habits = list_habits(self.conn)
-        current_id = self.grid_selector.currentData()
-        self.grid_selector.blockSignals(True)
-        self.grid_selector.clear()
-        for h in habits:
-            self.grid_selector.addItem(str(h["name"]), int(h["id"]))
-        if habits and current_id in [int(h["id"]) for h in habits]:
-            idx = [int(h["id"]) for h in habits].index(int(current_id))
-            self.grid_selector.setCurrentIndex(idx)
-        self.grid_selector.blockSignals(False)
+        count = len(list_habits(self.conn))
+        self.grid_title.setText(
+            "No habits yet" if not count else f"All habits combined · {count}"
+        )
+        self._update_heatmap_legend()
         month_mode = self.grid_mode.currentText() == "Month"
         self.month_prev.setVisible(month_mode)
         self.month_next.setVisible(month_mode)
         self.month_label.setVisible(month_mode)
-        if not habits:
-            self.grid_heatmap.set_matrix([[0] * 7 for _ in range(53)])
-            return
-        sel = int(self.grid_selector.currentData() or habits[0]["id"])
-        row = self.conn.execute("SELECT * FROM habits WHERE id=?", (sel,)).fetchone()
-        hd = dict(row)
-        completions = get_completions(self.conn, sel)
-        target = int(hd.get("target_count", 1) or 1)
+        import calendar as _cal
+
         if not month_mode:
+            end = date.fromisoformat(today_iso)
+            values, done, due = self._combined_heatmap(end - timedelta(days=364), end)
+            self.grid_heatmap.set_axis(True)
+            self.grid_heatmap.set_month_marks(self._year_month_marks(end))
             self.grid_heatmap.set_matrix(
-                build_matrix(completions, end_date=today_iso, days=365, target=target)
+                build_matrix(values, end_date=today_iso, days=365, target=100)
             )
+            self._set_heatmap_summary(len(values), done, due)
             return
         if not hasattr(self, "_view_year"):
             t = date.fromisoformat(today_iso)
             self._view_year, self._view_month = t.year, t.month
-        import calendar as _cal
-
+        last_day = _cal.monthrange(self._view_year, self._view_month)[1]
+        values, done, due = self._combined_heatmap(
+            date(self._view_year, self._view_month, 1),
+            date(self._view_year, self._view_month, last_day),
+        )
+        self.grid_heatmap.set_axis(False)
+        self.grid_heatmap.set_month_marks([])
         self.month_label.setText(f"{_cal.month_name[self._view_month]} {self._view_year}")
         self.grid_heatmap.set_matrix(
-            build_month_matrix(completions, self._view_year, self._view_month, target)
+            build_month_matrix(values, self._view_year, self._view_month, target=100)
         )
+        self._set_heatmap_summary(len(values), done, due)
 
     def _shift_month(self, delta: int) -> None:
         m = getattr(self, "_view_month", date.today().month)
@@ -479,8 +734,39 @@ class MainWindow(QMainWindow):
         path = self.export_grid_png()
         QMessageBox.information(self, "Exported", f"Saved {path}")
 
+    def _on_manage_folders(self) -> None:
+        dlg = FoldersDialog(self.conn, self)
+        dlg.exec()
+        self.refresh_folders()
+        self.refresh_all()
+
+    def _toggle_widget(self, checked: bool) -> None:
+        widget = getattr(self, "desktop_widget", None)
+        if widget is None:
+            return
+        if checked:
+            widget.start_auto_refresh(60)
+            widget.refresh()
+            widget.show()
+        else:
+            widget.stop_auto_refresh()
+            widget.hide()
+
+    def _on_widget_check(self, habit_id: int) -> None:
+        """One-tap check-off from the desktop widget (no modal banner)."""
+        today_iso = date.today().isoformat()
+        row = self.conn.execute("SELECT * FROM habits WHERE id=?", (habit_id,)).fetchone()
+        if row is None:
+            return
+        hd = dict(row)
+        current = int(get_completions(self.conn, habit_id).get(today_iso, 0))
+        new_value = current + 1 if hd.get("type") == "counter" else 1
+        log_completion(self.conn, habit_id, today_iso, new_value)
+        self.refresh_all()
+        self.check_achievements(show_banner=False)
+
     def _on_add(self) -> None:
-        dlg = AddHabitDialog(self)
+        dlg = AddHabitDialog(self, self.conn)
         if dlg.exec():
             try:
                 create_habit(self.conn, **dlg.values())
