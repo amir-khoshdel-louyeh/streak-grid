@@ -28,6 +28,8 @@ class ListView(QWidget):
     COLS = 2
     ROW_H = 64
     GAP = 8
+    SCROLL_AFTER = 10  # inner scroll only when habits exceed this
+    MAX_ROWS = 5  # = ceil(10 / 2): fits ten habits exactly
 
     def __init__(self, conn: sqlite3.Connection, parent=None) -> None:
         super().__init__(parent)
@@ -41,6 +43,7 @@ class ListView(QWidget):
         self.area = QScrollArea()
         self.area.setWidgetResizable(True)
         self.area.setFrameShape(QFrame.NoFrame)
+        self.area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.area.viewport().setAcceptDrops(True)
         self.area.viewport().installEventFilter(self)
         self.host = QWidget()
@@ -119,10 +122,19 @@ class ListView(QWidget):
 
     def _fit_height(self) -> None:
         rows = (len(self._visible) + self.COLS - 1) // self.COLS
-        content = rows * self.ROW_H + max(0, rows - 1) * self.GAP if rows else 0
-        self.host.setMinimumHeight(content)
-        self.area.setMinimumHeight(content)
+        total = len(self._order)
         self.area.setVisible(bool(self._visible))
+        if not self._visible:
+            return
+        if total > self.SCROLL_AFTER:
+            capped = self.MAX_ROWS * self.ROW_H + (self.MAX_ROWS - 1) * self.GAP
+            self.area.setMinimumHeight(capped)
+            self.area.setMaximumHeight(capped)
+        else:
+            content = rows * self.ROW_H + max(0, rows - 1) * self.GAP
+            self.area.setMinimumHeight(content)
+            self.area.setMaximumHeight(content)
+        self.area.updateGeometry()  # force scrollbar range refresh on re-layout
 
     # -- drag & drop ------------------------------------------------------
     def eventFilter(self, obj, event) -> bool:  # noqa: N802
