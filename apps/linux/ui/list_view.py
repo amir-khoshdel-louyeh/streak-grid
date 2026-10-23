@@ -79,9 +79,9 @@ class ListView(QWidget):
         grip.installEventFilter(self)
         archived_tag = "  [archived]" if h["archived"] else ""
         name = QLabel(f"{h['name']}  🔥{cur}  best {best}{archived_tag}")
-        mini = HeatmapWidget(cell=4, gap=2)
-        mini.setFixedHeight(7 * (4 + 2) + 2)
-        mini.setFixedWidth(53 * (4 + 2) + 2)
+        mini = HeatmapWidget(cell=6, gap=1)
+        mini.setFixedHeight(7 * (6 + 1) + 1)
+        mini.setFixedWidth(53 * (6 + 1) + 1)
         box.addWidget(grip)
         box.addWidget(name, stretch=1)
         box.addWidget(mini)
