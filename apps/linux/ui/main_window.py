@@ -34,6 +34,7 @@ from services.tray import (
     set_alert,
 )
 from db.store import (
+    clear_completion,
     create_folder,
     create_habit,
     get_completions,
@@ -53,6 +54,7 @@ from ui.list_view import ListView
 from ui.progress_ring import ProgressRing
 from ui.stats_view import StatsView
 from ui.theme import apply_theme, is_dark, set_dark
+from ui.week_table import WeekTable
 from widgets.desktop_widget import DesktopWidget
 
 
@@ -87,7 +89,6 @@ class MainWindow(QMainWindow):
         self.widget_action.setCheckable(True)
         self.widget_action.setChecked(True)
         self.widget_action.triggered.connect(self._toggle_widget)
-        self._setup_shortcuts()
 
         central = QWidget()
         central_layout = QVBoxLayout(central)
@@ -106,6 +107,7 @@ class MainWindow(QMainWindow):
         self.sections: list[QGroupBox] = []
 
         page_layout.addWidget(self._build_today_section())
+        page_layout.addWidget(self._build_week_section())
         page_layout.addWidget(self._build_list_section())
         page_layout.addWidget(self._build_grid_section())
         page_layout.addWidget(self._build_stats_section())
@@ -114,6 +116,7 @@ class MainWindow(QMainWindow):
         self.scroll.setWidget(page)
         central_layout.addWidget(self.scroll, 1)
         self.setCentralWidget(central)
+        self._setup_shortcuts()
         self._folder_ids: list[int | None] = [None]
         self.refresh_folders()
         self.tray = create_tray(self, on_show=self._show_from_tray, on_quit=self._quit_from_tray)
@@ -255,9 +258,19 @@ class MainWindow(QMainWindow):
         self.today_cards: list[HabitCard] = []
         return section
 
+    def _build_week_section(self) -> QGroupBox:
+        section = QGroupBox("This week")
+        self.sections.append(section)
+        layout = QVBoxLayout(section)
+        layout.setSpacing(12)
+        self.week_table = WeekTable(self.conn, on_toggle=self._on_week_toggle)
+        layout.addWidget(self.week_table)
+        return section
+
     def _build_list_section(self) -> QGroupBox:
         section = QGroupBox("All habits")
         self.sections.append(section)
+        self.list_section = section
         layout = QVBoxLayout(section)
         layout.setSpacing(10)
         self.list_view = ListView(self.conn, on_open=self._on_open_detail)
@@ -400,6 +413,7 @@ class MainWindow(QMainWindow):
         self.list_view.conn = new_conn
         self.stats_view.conn = new_conn
         self.nag.conn = new_conn
+        self.week_table.conn = new_conn
         if getattr(self, "desktop_widget", None) is not None:
             self.desktop_widget.conn = new_conn
         self.refresh_folders()
@@ -413,18 +427,18 @@ class MainWindow(QMainWindow):
         self.nag.set_interval(int(minutes))
 
     def _setup_shortcuts(self) -> None:
-        """Ctrl+N new habit, Ctrl+1..4 scroll to sections, / focuses search."""
+        """Ctrl+N new habit, Ctrl+1..N scroll to sections, / focuses search."""
         from PySide6.QtGui import QShortcut
 
         QShortcut("Ctrl+N", self, activated=self._on_add_focus)
-        for i in range(4):
+        for i in range(min(9, len(self.sections))):
             QShortcut(f"Ctrl+{i + 1}", self,
                       activated=lambda idx=i: self.scroll.ensureWidgetVisible(
                           self.sections[idx], 50, 50))
         QShortcut("/", self, activated=self._on_focus_search)
 
     def _on_focus_search(self) -> None:
-        self.scroll.ensureWidgetVisible(self.sections[1], 50, 50)
+        self.scroll.ensureWidgetVisible(self.list_section, 50, 50)
         self.list_view.search.setFocus()
 
     def _on_add_focus(self) -> None:
@@ -488,9 +502,11 @@ class MainWindow(QMainWindow):
     def refresh_all(self) -> None:
         self.refresh_today()
         self.refresh_grid()
+        if hasattr(self, "week_table"):
+            self.week_table.refresh()
         if hasattr(self, "list_view"):
             self.list_view.refresh()
-            self.sections[1].setTitle(f"All habits ({self.list_view.count})")
+            self.list_section.setTitle(f"All habits ({self.list_view.count})")
         if hasattr(self, "stats_view"):
             self.stats_view.refresh()
         widget = getattr(self, "desktop_widget", None)
@@ -733,6 +749,30 @@ class MainWindow(QMainWindow):
     def _on_export_grid(self) -> None:
         path = self.export_grid_png()
         QMessageBox.information(self, "Exported", f"Saved {path}")
+
+    def _on_week_toggle(self, habit_id: int) -> None:
+        """Tick / untick a habit for *today* from the week table."""
+        today_iso = date.today().isoformat()
+        row = self.conn.execute("SELECT * FROM habits WHERE id=?", (habit_id,)).fetchone()
+        if row is None:
+            return
+        hd = dict(row)
+        completions = get_completions(self.conn, habit_id)
+        done = is_done(hd, completions.get(today_iso), today_iso in completions)
+        if hd.get("type") == "dont_do":
+            # "done" = a clean day (no row); unticking records a slip.
+            if done:
+                log_completion(self.conn, habit_id, today_iso, 1)
+            else:
+                clear_completion(self.conn, habit_id, today_iso)
+        elif done:
+            clear_completion(self.conn, habit_id, today_iso)
+        else:
+            value = int(hd.get("target_count", 1) or 1) \
+                if hd.get("type") == "counter" else 1
+            log_completion(self.conn, habit_id, today_iso, value)
+        self.refresh_all()
+        self.check_achievements(show_banner=False)
 
     def _on_manage_folders(self) -> None:
         dlg = FoldersDialog(self.conn, self)

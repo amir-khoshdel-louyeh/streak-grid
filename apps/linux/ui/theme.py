@@ -115,6 +115,31 @@ QFrame[card="true"] {
 QFrame[card="true"]:hover { border: 1px solid $accent; }
 QFrame[card="true"][done="true"] { background: $done_bg; border: 1px solid $green; }
 
+/* ---- week contribution table --------------------------------------- */
+#WeekHeader { color: $muted; font-size: 12px; }
+#WeekHeaderToday { color: $accent; font-size: 12px; font-weight: 700; }
+QLabel[weekcell="done"] {
+    background: $green; border: 1px solid $green; border-radius: 9px;
+    color: $on_green; font-size: 15px; font-weight: 700;
+}
+QLabel[weekcell="empty"] {
+    background: $surface2; border: 1px solid $border_strong; border-radius: 9px;
+}
+QLabel[weekcell="off"], QLabel[weekcell="future"] {
+    background: transparent; border: 1px dashed $border; border-radius: 9px;
+}
+QPushButton#WeekTick { padding: 0; border-radius: 9px; font-size: 15px; font-weight: 700; }
+QPushButton#WeekTick[wbstate="done"] {
+    background: $green; border: 1px solid $green; color: $on_green;
+}
+QPushButton#WeekTick[wbstate="done"]:hover {
+    background: $green_strong; border-color: $green_strong;
+}
+QPushButton#WeekTick[wbstate="todo"] {
+    background: $surface2; border: 2px solid $accent; color: $muted;
+}
+QPushButton#WeekTick[wbstate="todo"]:hover { background: $hover; color: $accent; }
+
 /* ---- buttons ------------------------------------------------------- */
 QPushButton {
     background: $surface2;

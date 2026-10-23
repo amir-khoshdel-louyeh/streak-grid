@@ -6,6 +6,9 @@ with achievements, tray/nag/widget.
 ## Features
 
 - **Today** — progress ring, due habits as tappable cards (counter habits step up/down).
+- **This week** — a contribution-style table: one row per task, one column per day
+  (Mon–Sun). Only today's column is tickable; past days show what was done and
+  future days are dimmed.
 - **All habits** — searchable full-width rows, drag ⋮⋮ to reorder, double-click to
   open details; each row shows its folder, streak, best, next due date and a
   full-year mini heatmap.
@@ -22,7 +25,7 @@ with achievements, tray/nag/widget.
 
 ## Shortcuts
 
-`Ctrl+N` new habit · `Ctrl+1..4` jump to sections · `/` search · `Ctrl+T` theme
+`Ctrl+N` new habit · `Ctrl+1..5` jump to sections · `/` search · `Ctrl+T` theme
 
 ## Order
 
