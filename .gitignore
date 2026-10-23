@@ -104,7 +104,12 @@ local_settings.py
 # ===== docs - do NOT publish =====
 docs/
 **/docs/
-core/docs/
+# Shared cross-platform contracts MUST be versioned (Phase 6: single DB + API)
+!core/docs/
+core/docs/*
+!core/docs/LICENSING.md
+!core/docs/SPEC.md
+!core/docs/MIGRATIONS.md
 
 # ===== session dumps / large artifacts =====
 new-session---*.json
