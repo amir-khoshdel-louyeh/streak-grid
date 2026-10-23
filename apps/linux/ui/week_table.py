@@ -3,6 +3,12 @@
 Each row is a habit and each column a day of the current week. Only today's
 column is interactive: clicking a cell toggles that habit's completion for
 today. Past / future / unscheduled days render as read-only indicators.
+
+The grid is responsive: the day columns share the full width of the section
+(the task column keeps a heavier share) and every cell stretches with it, so
+the table fills the space and looks the same on a narrow laptop or a wide
+monitor. Thin divider lines under the header and between rows tie a task to
+its seven days, so a record is easy to follow across the row.
 """
 
 from __future__ import annotations
@@ -12,6 +18,7 @@ from datetime import date, timedelta
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QFrame,
     QGridLayout,
     QLabel,
     QPushButton,
@@ -24,8 +31,10 @@ from core.schedule import is_due
 from core.streak import is_done, is_paused
 from db.store import get_completions, list_habits, list_pauses
 
-CELL = 36
+CELL = 36  # minimum cell width / row height — cells grow with the window
+NAME_WEIGHT = 2  # task column takes twice the stretch of a single day column
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+COLUMNS = len(DAY_NAMES) + 1  # task column + seven day columns
 
 
 def _repolish(widget: QWidget) -> None:
@@ -52,7 +61,7 @@ class WeekTable(QWidget):
         outer.addWidget(self.caption)
         self._grid = QGridLayout()
         self._grid.setHorizontalSpacing(6)
-        self._grid.setVerticalSpacing(6)
+        self._grid.setVerticalSpacing(4)
         self._grid.setContentsMargins(0, 0, 0, 0)
         outer.addLayout(self._grid)
         self._cells: list[QWidget] = []
@@ -66,12 +75,19 @@ class WeekTable(QWidget):
                 widget.deleteLater()
         self._cells = []
 
+    def _divider(self, *, strong: bool = False) -> QFrame:
+        """1px rule spanning the whole row (task column + all seven days)."""
+        line = QFrame()
+        line.setFixedHeight(1)
+        line.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        _set_prop(line, "role", "weekheadline" if strong else "weekline")
+        return line
+
     def _make_cell(self, state: str, *, interactive: bool, habit_id: int,
                    done: bool, weekday: str) -> QWidget:
         if interactive:
             cell = QPushButton("✓" if done else "")
             cell.setObjectName("WeekTick")
-            cell.setFixedSize(CELL, CELL)
             cell.setCursor(Qt.PointingHandCursor)
             cell.setToolTip(
                 f"{'Untick' if done else 'Tick'} {weekday} (today)"
@@ -81,8 +97,10 @@ class WeekTable(QWidget):
         else:
             cell = QLabel("✓" if done else "")
             cell.setAlignment(Qt.AlignCenter)
-            cell.setFixedSize(CELL, CELL)
             _set_prop(cell, "weekcell", state)
+        cell.setMinimumWidth(CELL)
+        cell.setFixedHeight(CELL)
+        cell.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         return cell
 
     def _toggle(self, habit_id: int) -> None:
@@ -100,6 +118,12 @@ class WeekTable(QWidget):
             f"Week of {span}   ·   tick today's column ({DAY_NAMES[today.weekday()]})"
         )
 
+        # Every column stretches, so the grid always fills the section width
+        # instead of hugging the left edge on wide windows.
+        self._grid.setColumnStretch(0, NAME_WEIGHT)
+        for col in range(len(DAY_NAMES)):
+            self._grid.setColumnStretch(col + 1, 1)
+
         # header
         corner = QLabel("Task")
         corner.setObjectName("MutedText")
@@ -112,18 +136,20 @@ class WeekTable(QWidget):
             header.setTextFormat(Qt.RichText)
             header.setAlignment(Qt.AlignCenter)
             header.setMinimumWidth(CELL)
+            header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             header.setObjectName("WeekHeaderToday" if is_today else "WeekHeader")
             self._grid.addWidget(header, 0, col + 1)
+        self._grid.addWidget(self._divider(strong=True), 1, 0, 1, COLUMNS)
 
         habits = list_habits(self.conn)
-        self._grid.setColumnStretch(0, 1)
         if not habits:
             empty = QLabel("No habits yet — add one to start filling the week.")
             empty.setObjectName("EmptyState")
-            self._grid.addWidget(empty, 1, 0, 1, 8)
+            self._grid.addWidget(empty, 2, 0, 1, COLUMNS)
             return
 
-        for row, h in enumerate(habits, start=1):
+        for index, h in enumerate(habits):
+            row = 2 + index * 2
             hd = dict(h)
             habit_id = int(h["id"])
             completions = get_completions(self.conn, habit_id)
@@ -157,3 +183,6 @@ class WeekTable(QWidget):
                 )
                 self._grid.addWidget(cell, row, col + 1)
                 self._cells.append(cell)
+
+            if index < len(habits) - 1:
+                self._grid.addWidget(self._divider(), row + 1, 0, 1, COLUMNS)

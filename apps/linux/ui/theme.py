@@ -128,6 +128,9 @@ QLabel[weekcell="empty"] {
 QLabel[weekcell="off"], QLabel[weekcell="future"] {
     background: transparent; border: 1px dashed $border; border-radius: 9px;
 }
+/* grid rules that tie a task to its seven days */
+QFrame[role="weekline"] { background: $border; border: none; }
+QFrame[role="weekheadline"] { background: $border_strong; border: none; }
 QPushButton#WeekTick { padding: 0; border-radius: 9px; font-size: 15px; font-weight: 700; }
 QPushButton#WeekTick[wbstate="done"] {
     background: $green; border: 1px solid $green; color: $on_green;
