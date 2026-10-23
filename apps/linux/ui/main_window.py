@@ -61,10 +61,18 @@ from widgets.desktop_widget import DesktopWidget
 class MainWindow(QMainWindow):
     def __init__(self, conn: sqlite3.Connection | None = None,
                  db_path: str | None = None) -> None:
+        from PySide6.QtCore import QSize
+
+        from ui.screen import fit_to_screen
+
         super().__init__()
         self.setWindowTitle("StreakGrid")
-        self.resize(1040, 720)
-        self.setMinimumSize(760, 560)
+        # Small screens (and large font scaling) get a window that fits them
+        # instead of one that opens wider than the display.
+        self.window_minimum = QSize(520, 380)
+        self.compact_chrome = False
+        self._cards_columns: int | None = None
+        fit_to_screen(self, QSize(1040, 720), self.window_minimum, margin=24)
         from db.store import DEFAULT_DB_PATH
 
         self.conn = conn or init_db()
@@ -175,10 +183,10 @@ class MainWindow(QMainWindow):
         titles.setSpacing(0)
         title = QLabel("StreakGrid")
         title.setObjectName("AppTitle")
-        subtitle = QLabel("Build habits that stick")
-        subtitle.setObjectName("AppSubtitle")
+        self.app_subtitle = QLabel("Build habits that stick")
+        self.app_subtitle.setObjectName("AppSubtitle")
         titles.addWidget(title)
-        titles.addWidget(subtitle)
+        titles.addWidget(self.app_subtitle)
         row.addLayout(titles)
         row.addStretch(1)
 
@@ -191,6 +199,7 @@ class MainWindow(QMainWindow):
         self.achv_button = QPushButton("🏆  Achievements")
         self.achv_button.setProperty("role", "ghost")
         self.achv_button.setCursor(Qt.PointingHandCursor)
+        self.achv_button.setToolTip("Achievements")
         self.achv_button.clicked.connect(self._on_show_achievements)
         self.add_button = QPushButton("＋  New habit")
         self.add_button.setProperty("role", "primary")
@@ -237,7 +246,7 @@ class MainWindow(QMainWindow):
         caption = QLabel("Folder")
         caption.setObjectName("MutedText")
         self.folder_filter = QComboBox()
-        self.folder_filter.setMinimumWidth(220)
+        self.folder_filter.setMinimumWidth(150)
         self.folder_filter.currentIndexChanged.connect(lambda _i: self.refresh_today())
         filters.addWidget(caption)
         filters.addWidget(self.folder_filter)
@@ -246,14 +255,15 @@ class MainWindow(QMainWindow):
 
         self.cards_box = QGridLayout()
         self.cards_box.setSpacing(12)
-        self.cards_box.setColumnStretch(0, 1)
-        self.cards_box.setColumnStretch(1, 1)
+        for col in range(3):
+            self.cards_box.setColumnStretch(col, 1)
         cards_host = QWidget()
         cards_host.setLayout(self.cards_box)
         layout.addWidget(cards_host)
         self.empty_label = QLabel("No habits yet — add your first habit to get started.")
         self.empty_label.setObjectName("EmptyState")
         self.empty_label.setAlignment(Qt.AlignCenter)
+        self.empty_label.setWordWrap(True)
         layout.addWidget(self.empty_label)
         self.today_cards: list[HabitCard] = []
         return section
@@ -305,6 +315,7 @@ class MainWindow(QMainWindow):
         summary_row.setSpacing(8)
         self.heatmap_summary = QLabel("")
         self.heatmap_summary.setObjectName("MutedText")
+        self.heatmap_summary.setWordWrap(True)
         self.month_prev = QPushButton("◀")
         self.month_prev.setObjectName("IconButton")
         self.month_prev.setFixedSize(32, 32)
@@ -580,8 +591,10 @@ class MainWindow(QMainWindow):
                 folder_color=folder_color,
                 stepper=hd.get("type") == "counter",
             )
-            self.cards_box.addWidget(card, len(self.today_cards) // 2,
-                                      len(self.today_cards) % 2)
+            columns = self.cards_per_row()
+            self._set_card_columns(columns)
+            self.cards_box.addWidget(card, len(self.today_cards) // columns,
+                                      len(self.today_cards) % columns)
             self.today_cards.append(card)
         self.progress_ring.set_progress(done_count, len(habits))
         self.progress_label.setText(f"Today — {done_count}/{len(habits)} done")
@@ -752,6 +765,47 @@ class MainWindow(QMainWindow):
     def _on_export_grid(self) -> None:
         path = self.export_grid_png()
         QMessageBox.information(self, "Exported", f"Saved {path}")
+
+    # -- responsive chrome / layout --------------------------------------
+    def cards_per_row(self, width: int | None = None) -> int:
+        """1–3 habit cards per row depending on the window width."""
+        width = self.width() if width is None else width
+        if width >= 1180:
+            return 3
+        if width >= 660:
+            return 2
+        return 1
+
+    def _set_card_columns(self, columns: int) -> None:
+        """Re-flow Today's cards without rebuilding them from the database."""
+        if columns == self._cards_columns or not hasattr(self, "cards_box"):
+            return
+        self._cards_columns = columns
+        for col in range(3):
+            self.cards_box.setColumnStretch(col, 1 if col < columns else 0)
+        for index, card in enumerate(self.today_cards):
+            self.cards_box.removeWidget(card)
+            self.cards_box.addWidget(card, index // columns, index % columns)
+
+    def _apply_compact_chrome(self) -> None:
+        """Trim the header (not the content) when the window is narrow."""
+        compact = self.width() < 620
+        if compact == self.compact_chrome:
+            return
+        self.compact_chrome = compact
+        if hasattr(self, "app_subtitle"):
+            self.app_subtitle.setVisible(not compact)
+        if hasattr(self, "achv_button"):
+            self.achv_button.setText("🏆" if compact else "🏆  Achievements")
+        if hasattr(self, "add_button"):
+            self.add_button.setText("＋" if compact else "＋  New habit")
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._apply_compact_chrome()
+        self._set_card_columns(self.cards_per_row())
+        if hasattr(self, "date_label"):
+            self.date_label.setVisible(self.width() >= 560)
 
     def _on_progress_toggle(self, habit_id: int) -> None:
         """Tick / untick a habit for *today* from the progress grid."""

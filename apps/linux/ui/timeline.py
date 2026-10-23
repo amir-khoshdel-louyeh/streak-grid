@@ -57,7 +57,9 @@ DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-GUTTER = 168        # frozen habit-name column width
+GUTTER = 168        # widest habit-name column
+GUTTER_MIN = 84     # narrowest, so small windows keep room for the day cells
+GUTTER_RATIO = 0.22
 AXIS_WIDE = 34      # weekday + day number labels
 AXIS_DAY = 22       # day numbers only
 AXIS_MONTH = 20     # month labels only
@@ -418,6 +420,13 @@ class TimelineNames(QWidget):
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.refresh_theme()
 
+    def set_gutter(self, width: int) -> None:
+        """Width of the name column, driven by the section width."""
+        width = max(GUTTER_MIN, min(GUTTER, int(width)))
+        if width != self.width():
+            self.setFixedWidth(width)
+            self.update()
+
     def refresh_theme(self) -> None:
         from ui.theme import chart_colors
 
@@ -444,11 +453,13 @@ class TimelineNames(QWidget):
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
+        width = max(1, self.width())
+        text_width = max(10, width - 10)
         painter.setPen(self._muted)
         painter.setFont(QFont("Sans", 8))
-        painter.drawText(QRect(0, 0, GUTTER - 8, self._axis_h),
+        painter.drawText(QRect(0, 0, text_width, self._axis_h),
                          Qt.AlignLeft | Qt.AlignVCenter, "Task")
-        painter.fillRect(QRect(0, self._axis_h, GUTTER, 1), self._line_strong)
+        painter.fillRect(QRect(0, self._axis_h, width, 1), self._line_strong)
 
         font = QFont("Sans", max(7, min(11, self._row_h - 6)))
         font.setWeight(QFont.Weight.DemiBold)
@@ -457,12 +468,12 @@ class TimelineNames(QWidget):
         painter.setFont(font)
         for index, name in enumerate(self._names):
             y = self._axis_h + self._row_gap + index * (self._row_h + self._row_gap)
-            text = elide.elidedText(name, Qt.ElideRight, GUTTER - 10)
-            painter.drawText(QRect(0, y, GUTTER - 10, self._row_h),
+            text = elide.elidedText(name, Qt.ElideRight, text_width)
+            painter.drawText(QRect(0, y, text_width, self._row_h),
                              Qt.AlignLeft | Qt.AlignVCenter, text)
             if index < len(self._names) - 1:
                 line_y = y + self._row_h + self._row_gap // 2
-                painter.fillRect(QRect(0, line_y, GUTTER, 1), self._line)
+                painter.fillRect(QRect(0, line_y, width, 1), self._line)
         painter.end()
 
 
@@ -501,6 +512,8 @@ class TimelineTable(QWidget):
 
         self.caption = QLabel("")
         self.caption.setObjectName("MutedText")
+        # Wrapping keeps this long line from setting the section's minimum width.
+        self.caption.setWordWrap(True)
         outer.addWidget(self.caption)
 
         self.names = TimelineNames()
@@ -521,15 +534,25 @@ class TimelineTable(QWidget):
 
         self.empty = QLabel("No habits yet — add one to start filling the progress view.")
         self.empty.setObjectName("EmptyState")
+        self.empty.setWordWrap(True)
         outer.addWidget(self.empty)
 
         self.range_picker.setCurrentIndex(self._picker_index(self.range_picker, self._range_key))
         self.base_picker.setCurrentIndex(self._picker_index(self.base_picker, self._base))
         self.range_picker.currentIndexChanged.connect(self._on_range_changed)
         self.base_picker.currentIndexChanged.connect(self._on_base_changed)
+        self._sync_gutter()
         self.refresh()
 
     # -- geometry --------------------------------------------------------
+    def _sync_gutter(self) -> None:
+        """Name column shares the width with the day grid."""
+        self.names.set_gutter(int(self.width() * GUTTER_RATIO))
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._sync_gutter()
+
     def _on_cell_metrics(self, axis_h: int, row_h: int, row_gap: int,
                          height: int) -> None:
         """Keep the name column and the scroll viewport in step with the grid.
@@ -594,7 +617,8 @@ class TimelineTable(QWidget):
         supports_calendar = spec.months is not None
         self.base_picker.setEnabled(supports_calendar)
         self.base_picker.setToolTip(
-            "" if supports_calendar else "10 days has no calendar equivalent")
+            "Rolling — the window always ends today" if supports_calendar
+            else "10 days has no calendar equivalent")
         tracked = bool(rows)
         self.names.setVisible(tracked)
         self.scroll.setVisible(tracked)

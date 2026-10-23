@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import sqlite3
 
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, QSize, Qt
 from PySide6.QtGui import QBrush, QColor, QTextCharFormat
 from PySide6.QtWidgets import (
     QCalendarWidget,
     QDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QVBoxLayout,
+    QWidget,
 )
 
 from core.heatmap import build_matrix
@@ -27,6 +30,7 @@ from db.store import (
 from ui.add_dialog import AddHabitDialog
 from ui.heatmap_widget import HeatmapWidget
 from ui.pause_dialog import PauseDialog
+from ui.screen import fit_to_screen
 
 
 class DetailDialog(QDialog):
@@ -38,12 +42,18 @@ class DetailDialog(QDialog):
         self.habit = dict(row) if row else {}
         self.setWindowTitle(f"Habit — {self.habit.get('name', habit_id)}")
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(f"{self.habit.get('name','')} [{self.habit.get('type')}]"))
+        # The body lives in a scroll area so the dialog can shrink to a small
+        # screen instead of opening taller than the display.
+        body = QWidget()
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(0, 0, 0, 0)
+        header = QLabel(f"{self.habit.get('name','')} [{self.habit.get('type')}]")
+        header.setWordWrap(True)
+        layout.addWidget(header)
 
         self.streak_label = QLabel("")
         layout.addWidget(self.streak_label)
-        self.history_heatmap = HeatmapWidget(cell=16, gap=2)
+        self.history_heatmap = HeatmapWidget(cell=16, gap=2, responsive=True)
         layout.addWidget(self.history_heatmap)
 
         self.calendar = QCalendarWidget()
@@ -52,6 +62,7 @@ class DetailDialog(QDialog):
         layout.addWidget(self.calendar)
 
         self.info = QLabel("")
+        self.info.setWordWrap(True)
         layout.addWidget(self.info)
 
         mid = QHBoxLayout()
@@ -91,7 +102,18 @@ class DetailDialog(QDialog):
         meta.addWidget(close_button)
         layout.addLayout(meta)
         self.pause_info = QLabel("")
+        self.pause_info.setWordWrap(True)
         layout.addWidget(self.pause_info)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(body)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
+        fit_to_screen(self, QSize(620, 700), QSize(320, 300))
+
         self._load_day()
         self._load_pauses()
         self._highlight_days()

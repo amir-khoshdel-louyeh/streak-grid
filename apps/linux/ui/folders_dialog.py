@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QColorDialog,
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from db.store import create_folder, delete_folder, list_folders, update_folder
+from ui.screen import fit_to_screen
 
 DEFAULT_COLOR = "#7aa2f7"
 
@@ -92,7 +93,7 @@ class FoldersDialog(QDialog):
         self.conn = conn
         self.changed = False
         self.setWindowTitle("Folders")
-        self.resize(440, 420)
+        fit_to_screen(self, QSize(440, 420), QSize(300, 260))
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)

@@ -30,6 +30,19 @@ with achievements, tray/nag/widget.
 
 `Ctrl+N` new habit · `Ctrl+1..5` jump to sections · `/` search · `Ctrl+T` theme
 
+## Screens
+
+Every window is clamped to the display it opens on, so the app also fits a
+1366x768 panel at 150% scaling or a small netbook screen:
+
+- the header trims to compact icons; Today reflows between 1 and 3 habit cards
+  per row; long lists drop their year mini heatmap and Stats text wraps;
+- Progress scales its task column with the window, short ranges fill the width
+  and long ranges keep a readable day size and scroll sideways;
+- under ~430px of width the page scrolls sideways instead of clipping;
+- dialogs (habit detail, new habit, folders, achievements, welcome) are sized to
+  the screen, with the habit detail body scrolling inside the dialog.
+
 ## Order
 
 Drag rows in All habits to reorder — Today follows the same order.

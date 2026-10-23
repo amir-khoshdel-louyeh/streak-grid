@@ -48,9 +48,11 @@ RANGES: tuple[RangeSpec, ...] = (
     RangeSpec("1y", "1 year", rolling_days=365, months=12, min_cell=5, row_h=12),
 )
 
+# Short labels keep the picker narrow enough for small screens; the widget
+# carries the longer explanation as a tooltip.
 BASES: tuple[tuple[str, str], ...] = (
     (CALENDAR, "Calendar"),
-    (ROLLING, "Rolling (ends today)"),
+    (ROLLING, "Rolling"),
 )
 
 DEFAULT_RANGE = "week"

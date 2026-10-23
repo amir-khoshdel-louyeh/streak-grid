@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import sqlite3
 
+from PySide6.QtCore import QSize
 from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
 
 from core.achievements import ACHIEVEMENTS
+from ui.screen import fit_to_screen
 
 
 class AchievementsDialog(QDialog):
@@ -23,5 +25,7 @@ class AchievementsDialog(QDialog):
             at = unlocked.get(code)
             icon = "🏅" if at else "🔒"
             lab = QLabel(f"{icon} {name} ({code})" + (f" — {at}" if at else ""))
+            lab.setWordWrap(True)
             layout.addWidget(lab)
             self.rows.append(lab)
+        fit_to_screen(self, QSize(460, 340), QSize(300, 240))

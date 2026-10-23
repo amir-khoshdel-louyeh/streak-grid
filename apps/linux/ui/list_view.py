@@ -26,6 +26,13 @@ from db.store import get_completions, list_folders, list_habits, list_pauses, se
 from ui.heatmap_widget import HeatmapWidget
 
 
+def _plain(text: str) -> str:
+    """Drop the inline markup used for the folder colour dot (for tooltips)."""
+    import re
+
+    return re.sub(r"<[^>]+>", "", text)
+
+
 class _HabitRow(QFrame):
     """Row frame that opens the habit on double-click."""
 
@@ -43,6 +50,7 @@ class ListView(QWidget):
     COLS = 1
     ROW_H = 72
     GAP = 8
+    MINI_ROW_WIDTH = 620  # below this the year mini heatmap is dropped
 
     def __init__(self, conn: sqlite3.Connection, parent=None, on_open=None) -> None:
         super().__init__(parent)
@@ -77,6 +85,7 @@ class ListView(QWidget):
         self._order: list[int] = []
         self._visible: list[int] = []
         self._rows: dict[int, QFrame] = {}
+        self._minis: dict[int, HeatmapWidget] = {}
         self._folders: dict[int, dict] = {}
         self._press: tuple[int, QPoint] | None = None
 
@@ -112,6 +121,7 @@ class ListView(QWidget):
         meta = QLabel()
         meta.setObjectName("CardMeta")
         meta.setTextFormat(Qt.RichText)
+        meta.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         parts: list[str] = []
         folder = self._folders.get(int(hd.get("folder_id") or -1))
         if folder:
@@ -126,6 +136,7 @@ class ListView(QWidget):
         if h["archived"]:
             parts.append("archived")
         meta.setText("   ·   ".join(parts))
+        meta.setToolTip("   ·   ".join(_plain(p) for p in parts))
         text.addWidget(name)
         text.addWidget(meta)
 
@@ -134,6 +145,8 @@ class ListView(QWidget):
             completions, end_date=today_iso, days=365, target=target
         ))
         mini.setFixedSize(mini.sizeHint())
+        mini.setVisible(self.width() >= self.MINI_ROW_WIDTH)
+        self._minis[int(h["id"])] = mini
 
         box.addWidget(grip)
         box.addLayout(text, 1)
@@ -153,6 +166,7 @@ class ListView(QWidget):
         for w in self._rows.values():
             w.deleteLater()
         self._rows = {}
+        self._minis = {}
         self._folders = {int(f["id"]): dict(f) for f in list_folders(self.conn)}
         self._order = [int(h["id"]) for h in list_habits(self.conn, include_archived=True)]
         query = self.search.text().strip().lower()
@@ -163,6 +177,7 @@ class ListView(QWidget):
             self._rows[hid] = self._build_row(h, today_iso)
         self._relayout()
         self._fit_height()
+        self._apply_compact()
         self.empty.setVisible(not self._visible)
         self.empty.setText("No habits found." if query and not self._visible else "No habits yet.")
 
@@ -183,6 +198,16 @@ class ListView(QWidget):
             self.grid.takeAt(0)
         for i, hid in enumerate(self._visible):
             self.grid.addWidget(self._rows[hid], i // self.COLS, i % self.COLS)
+
+    def _apply_compact(self) -> None:
+        """Drop the year mini heatmap when the rows get too narrow for it."""
+        show_mini = self.width() >= self.MINI_ROW_WIDTH
+        for mini in self._minis.values():
+            mini.setVisible(show_mini)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._apply_compact()
 
     def _fit_height(self) -> None:
         """Grow with the content and let the page's outer scroll handle it."""

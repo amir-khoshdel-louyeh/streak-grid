@@ -58,9 +58,23 @@ class DesktopWidget(QWidget):
         pos = self._settings().value("pos")
         if pos is not None:
             try:
-                self.move(pos)
+                self.move(self._clamp_to_screen(pos))
             except (TypeError, AttributeError):
                 pass
+
+    def _clamp_to_screen(self, pos: QPoint) -> QPoint:
+        """Keep the widget on a screen that still exists (monitor changes)."""
+        from PySide6.QtGui import QGuiApplication
+
+        screen = QGuiApplication.screenAt(pos) or QGuiApplication.primaryScreen()
+        if screen is None:
+            return pos
+        area = screen.availableGeometry()
+        width = max(self.width(), self.sizeHint().width())
+        height = max(self.height(), self.sizeHint().height())
+        x = min(max(pos.x(), area.left()), area.right() - width + 1)
+        y = min(max(pos.y(), area.top()), area.bottom() - height + 1)
+        return QPoint(int(x), int(y))
 
     def _save_position(self) -> None:
         self._settings().setValue("pos", self.pos())

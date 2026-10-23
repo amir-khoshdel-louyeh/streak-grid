@@ -6,7 +6,7 @@ import json
 import sqlite3
 from datetime import date
 
-from PySide6.QtCore import QTime, Qt
+from PySide6.QtCore import QSize, QTime, Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from db.store import list_folders
+from ui.screen import fit_to_screen
 
 # (label, store value) pairs — the dialog never shows raw enum strings.
 _TYPES = [
@@ -54,7 +55,7 @@ class AddHabitDialog(QDialog):
         super().__init__(parent)
         self.conn = conn
         self.setWindowTitle("New habit")
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(340)
 
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("e.g. Read 20 min")
@@ -111,6 +112,7 @@ class AddHabitDialog(QDialog):
 
         self._sync_target()
         self._sync_schedule()
+        fit_to_screen(self, self.sizeHint(), QSize(340, 300))
 
     # -- sub-pages -------------------------------------------------------
     def _weekday_page(self) -> QWidget:

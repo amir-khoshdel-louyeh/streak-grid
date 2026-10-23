@@ -39,9 +39,13 @@ class StatsView(QWidget):
         self.layout.setSpacing(12)
         self.summary = QLabel("")
         self.summary.setObjectName("CardTitle")
+        self.summary.setWordWrap(True)
         self.layout.addWidget(self.summary)
         self.extra = QLabel("")
         self.extra.setObjectName("MutedText")
+        # These lines are long: wrapping keeps them from forcing the window
+        # wider than a small screen can show.
+        self.extra.setWordWrap(True)
         self.layout.addWidget(self.extra)
         self.rows_host = QVBoxLayout()
         self.rows_host.setSpacing(8)
@@ -90,11 +94,13 @@ class StatsView(QWidget):
             title = QLabel(str(h["name"]))
             title.setObjectName("CardTitle")
             title.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+            title.setToolTip(str(h["name"]))
             detail = QLabel(
                 f"30d {r30:.0%}   ·   90d {r90:.0%}   ·   all {rall:.0%}   ·   "
                 f"streak {cur}   ·   best {best}   ·   strength {strength:.0%}"
             )
             detail.setObjectName("CardMeta")
+            detail.setWordWrap(True)
             card_box.addWidget(title, 1)
             card_box.addWidget(detail)
             self.rows_host.addWidget(card)
