@@ -43,7 +43,7 @@ class DetailDialog(QDialog):
 
         self.streak_label = QLabel("")
         layout.addWidget(self.streak_label)
-        self.history_heatmap = HeatmapWidget(cell=8, gap=2)
+        self.history_heatmap = HeatmapWidget(cell=12, gap=2)
         layout.addWidget(self.history_heatmap)
 
         self.calendar = QCalendarWidget()

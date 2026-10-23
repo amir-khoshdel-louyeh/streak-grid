@@ -140,7 +140,7 @@ class MainWindow(QMainWindow):
         mode_row.addWidget(self.month_label)
         mode_row.addWidget(self.month_next)
         mode_row.addStretch(1)
-        self.grid_heatmap = HeatmapWidget(cell=14, gap=3)
+        self.grid_heatmap = HeatmapWidget(cell=21, gap=3)
         self.export_button = QPushButton("Export PNG")
         self.export_button.clicked.connect(self._on_export_grid)
         grid_layout.addWidget(self.grid_selector)
