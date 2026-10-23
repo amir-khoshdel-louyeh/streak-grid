@@ -1,4 +1,4 @@
-"""Main window — R1: single scrollable page (Today / All / Heatmap / Stats)."""
+"""Main window — R1: single scrollable page (Today / Progress / All / Heatmap / Stats)."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ from ui.list_view import ListView
 from ui.progress_ring import ProgressRing
 from ui.stats_view import StatsView
 from ui.theme import apply_theme, is_dark, set_dark
-from ui.week_table import WeekTable
+from ui.timeline import TimelineTable
 from widgets.desktop_widget import DesktopWidget
 
 
@@ -107,7 +107,7 @@ class MainWindow(QMainWindow):
         self.sections: list[QGroupBox] = []
 
         page_layout.addWidget(self._build_today_section())
-        page_layout.addWidget(self._build_week_section())
+        page_layout.addWidget(self._build_progress_section())
         page_layout.addWidget(self._build_list_section())
         page_layout.addWidget(self._build_grid_section())
         page_layout.addWidget(self._build_stats_section())
@@ -258,13 +258,13 @@ class MainWindow(QMainWindow):
         self.today_cards: list[HabitCard] = []
         return section
 
-    def _build_week_section(self) -> QGroupBox:
-        section = QGroupBox("This week")
+    def _build_progress_section(self) -> QGroupBox:
+        section = QGroupBox("Progress")
         self.sections.append(section)
         layout = QVBoxLayout(section)
         layout.setSpacing(12)
-        self.week_table = WeekTable(self.conn, on_toggle=self._on_week_toggle)
-        layout.addWidget(self.week_table)
+        self.progress_table = TimelineTable(self.conn, on_toggle=self._on_progress_toggle)
+        layout.addWidget(self.progress_table)
         return section
 
     def _build_list_section(self) -> QGroupBox:
@@ -413,7 +413,7 @@ class MainWindow(QMainWindow):
         self.list_view.conn = new_conn
         self.stats_view.conn = new_conn
         self.nag.conn = new_conn
-        self.week_table.conn = new_conn
+        self.progress_table.conn = new_conn
         if getattr(self, "desktop_widget", None) is not None:
             self.desktop_widget.conn = new_conn
         self.refresh_folders()
@@ -473,6 +473,9 @@ class MainWindow(QMainWindow):
         chart = getattr(getattr(self, "stats_view", None), "week_chart", None)
         if chart is not None:
             chart.refresh_theme()
+        progress = getattr(self, "progress_table", None)
+        if progress is not None:
+            progress.refresh_theme()
         self._update_heatmap_legend()
 
     def _on_tray_done(self) -> None:
@@ -502,8 +505,8 @@ class MainWindow(QMainWindow):
     def refresh_all(self) -> None:
         self.refresh_today()
         self.refresh_grid()
-        if hasattr(self, "week_table"):
-            self.week_table.refresh()
+        if hasattr(self, "progress_table"):
+            self.progress_table.refresh()
         if hasattr(self, "list_view"):
             self.list_view.refresh()
             self.list_section.setTitle(f"All habits ({self.list_view.count})")
@@ -750,8 +753,8 @@ class MainWindow(QMainWindow):
         path = self.export_grid_png()
         QMessageBox.information(self, "Exported", f"Saved {path}")
 
-    def _on_week_toggle(self, habit_id: int) -> None:
-        """Tick / untick a habit for *today* from the week table."""
+    def _on_progress_toggle(self, habit_id: int) -> None:
+        """Tick / untick a habit for *today* from the progress grid."""
         today_iso = date.today().isoformat()
         row = self.conn.execute("SELECT * FROM habits WHERE id=?", (habit_id,)).fetchone()
         if row is None:

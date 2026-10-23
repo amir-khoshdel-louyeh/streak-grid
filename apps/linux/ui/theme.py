@@ -284,6 +284,12 @@ _CHART = {
         "chart_empty": "#24283b",
         "chart_fill": "#40c463",
         "chart_text": "#7f88b3",
+        "grid_line": "#2c3145",
+        "grid_line_strong": "#3d4463",
+        "grid_off": "#2c3145",
+        "grid_accent": "#7aa2f7",
+        "grid_text": "#c0caf5",
+        "grid_on_fill": "#15161f",
     },
     "light": {
         "heatmap": ["#ebedf0", "#9be9a8", "#40c463", "#30a14e", "#216e39"],
@@ -293,6 +299,12 @@ _CHART = {
         "chart_empty": "#eaeef2",
         "chart_fill": "#2da44e",
         "chart_text": "#59606a",
+        "grid_line": "#e4e8ec",
+        "grid_line_strong": "#d0d7de",
+        "grid_off": "#d0d7de",
+        "grid_accent": "#0969da",
+        "grid_text": "#1f2328",
+        "grid_on_fill": "#ffffff",
     },
 }
 

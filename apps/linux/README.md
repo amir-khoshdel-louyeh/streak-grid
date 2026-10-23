@@ -6,9 +6,12 @@ with achievements, tray/nag/widget.
 ## Features
 
 - **Today** — progress ring, due habits as tappable cards (counter habits step up/down).
-- **This week** — a contribution-style table: one row per task, one column per day
-  (Mon–Sun). Only today's column is tickable; past days show what was done and
-  future days are dimmed.
+- **Progress** — a contribution-style timeline: one row per task, one column per
+  day. Pick a **Range** (This week, 10 days, 1 month, 3 months, 6 months, 1 year)
+  and a **Window**: *Calendar* (calendar week, whole months; future days dimmed)
+  or *Rolling* (ends today). Both choices are remembered. Only today's column is
+  tickable; long ranges shrink their day cells and then scroll sideways, with the
+  task names pinned on the left.
 - **All habits** — searchable full-width rows, drag ⋮⋮ to reorder, double-click to
   open details; each row shows its folder, streak, best, next due date and a
   full-year mini heatmap.
