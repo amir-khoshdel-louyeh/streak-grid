@@ -110,6 +110,10 @@ class ListView(QWidget):
     def rows(self) -> list[QWidget]:
         return [self._rows[hid] for hid in self._visible if hid in self._rows]
 
+    @property
+    def count(self) -> int:
+        return len(self._visible)
+
     def _habit_name(self, hid: int) -> str:
         row = self.conn.execute("SELECT name FROM habits WHERE id=?", (hid,)).fetchone()
         return str(row["name"]) if row else ""
