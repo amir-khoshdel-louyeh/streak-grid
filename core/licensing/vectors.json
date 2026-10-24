@@ -1,0 +1,40 @@
+{
+  "_comment": "Frozen behavior cases for Phase 6 license logic (C03). Every platform port (Python/C#/Kotlin/TS) MUST pass all cases. New behavior = new case, never edit an existing expectation.",
+  "version": 1,
+  "grace_days": 30,
+  "skew_hours": 24,
+  "effective_state": [
+    {"name": "unactivated stays unactivated offline", "cached": "unactivated", "last_check": "", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "unactivated"},
+    {"name": "fresh check stays active", "cached": "active", "last_check": "2026-10-10T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "active"},
+    {"name": "grace boundary is inclusive (30d)", "cached": "active", "last_check": "2026-09-15T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "active"},
+    {"name": "31 days offline expires grace", "cached": "active", "last_check": "2026-09-14T11:59:59Z", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "grace_expired"},
+    {"name": "40 days offline expires grace", "cached": "active", "last_check": "2026-09-05T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "grace_expired"},
+    {"name": "active but never checked expires", "cached": "active", "last_check": "", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "grace_expired"},
+    {"name": "small future timestamp is skew, stays active", "cached": "active", "last_check": "2026-10-15T14:00:00Z", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "active"},
+    {"name": "far future timestamp is invalid cache", "cached": "active", "last_check": "2026-10-20T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "grace_expired"},
+    {"name": "known lock sticks while offline", "cached": "locked", "last_check": "2026-10-10T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "locked"},
+    {"name": "known suspension sticks while offline", "cached": "suspended", "last_check": "2026-10-10T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "locked"},
+    {"name": "grace_expired stays expired offline", "cached": "grace_expired", "last_check": "2026-09-01T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "grace_expired"},
+    {"name": "online active recovers", "cached": "grace_expired", "last_check": "2026-09-01T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": "active", "expect": "active"},
+    {"name": "online suspended locks", "cached": "active", "last_check": "2026-10-10T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": "suspended", "expect": "locked"},
+    {"name": "online banned locks", "cached": "active", "last_check": "2026-10-10T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": "banned", "expect": "locked"},
+    {"name": "revoked token locks", "cached": "active", "last_check": "2026-10-10T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": "revoked", "expect": "locked"},
+    {"name": "unknown cached status is safe default", "cached": "weird", "last_check": "2026-10-10T12:00:00Z", "now": "2026-10-15T12:00:00Z", "server": null, "expect": "unactivated"}
+  ],
+  "gating": [
+    {"name": "free cannot export", "plan": "free", "feature": "export", "expect": false},
+    {"name": "pro can export", "plan": "pro", "feature": "export", "expect": true},
+    {"name": "free cannot use widget", "plan": "free", "feature": "widget", "expect": false},
+    {"name": "pro can use widget", "plan": "pro", "feature": "widget", "expect": true},
+    {"name": "core features are free", "plan": "free", "feature": "core", "expect": true},
+    {"name": "core features are pro", "plan": "pro", "feature": "core", "expect": true},
+    {"name": "unknown feature fails closed", "plan": "pro", "feature": "teleport", "expect": false},
+    {"name": "unknown plan behaves as free", "plan": "gold", "feature": "export", "expect": false},
+    {"name": "unknown plan keeps core", "plan": "gold", "feature": "core", "expect": true}
+  ],
+  "habit_limit": [
+    {"name": "free cap is 5", "plan": "free", "expect": 5},
+    {"name": "pro is unlimited", "plan": "pro", "expect": null},
+    {"name": "unknown plan is capped as free", "plan": "gold", "expect": 5}
+  ]
+}
