@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS meta(
 );
 
 CREATE TABLE IF NOT EXISTS entitlements_cache(
-  user_id TEXT NOT NULL DEFAULT '',
+  user_id TEXT NOT NULL DEFAULT '' UNIQUE,
   plan TEXT NOT NULL DEFAULT 'free' CHECK(plan IN ('free','pro')),
   expires_at TEXT,
   source TEXT NOT NULL DEFAULT 'signup',

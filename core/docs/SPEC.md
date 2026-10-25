@@ -165,7 +165,7 @@ CREATE TABLE meta(
 );
 
 CREATE TABLE entitlements_cache(
-  user_id TEXT NOT NULL DEFAULT '',
+  user_id TEXT NOT NULL DEFAULT '' UNIQUE,
   plan TEXT NOT NULL DEFAULT 'free' CHECK(plan IN ('free','pro')),
   expires_at TEXT,                       -- UTC ISO-8601, NULL = no expiry
   source TEXT NOT NULL DEFAULT 'signup',
