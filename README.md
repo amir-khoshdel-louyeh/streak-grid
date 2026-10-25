@@ -1,6 +1,6 @@
 # streakgrid
 
-Tactical habit tracker for Windows, Linux & Android — GitHub-style heatmaps, widgets, flexible scheduling, smart streaks & 100% on-device. Monorepo.
+Tactical habit tracker for Windows, Linux & Android — GitHub-style heatmaps, widgets, flexible scheduling, smart streaks & offline-first. Monorepo.
 
 ## Features (v1 parity with HabitForge Tactical)
 
@@ -14,7 +14,7 @@ Tactical habit tracker for Windows, Linux & Android — GitHub-style heatmaps, w
 - Nag mode (persistent reminder until done)
 - Stats dashboard: completion rate, best streak, weekly chart, per-habit breakdown
 - 8 achievements (First Step → Century Club)
-- 100% on-device, no account, no cloud
+- Offline-first: one-time free activation, then fully offline; habit content stays on-device
 
 ## Structure
 

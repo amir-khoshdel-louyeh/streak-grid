@@ -134,8 +134,10 @@ recompute for that habit (no cached streaks in v0.1).
 
 ## 7. Linux non-goals v1
 
-No cloud sync, no account, no AI, no HealthKit equiv. X11 + Wayland supported;
+No AI, no HealthKit equiv. X11 + Wayland supported;
 widget falls back to tray menu if compositor denies always-on-top.
+(Account/registry moved to Phase 6, §8 — habit content itself is still
+on-device only.)
 
 ## 8. Phase 6 — shared account tables (single DB, all platforms)
 
