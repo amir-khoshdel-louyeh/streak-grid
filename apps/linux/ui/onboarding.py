@@ -37,8 +37,10 @@ class WelcomeDialog(QDialog):
         story.setWordWrap(True)
         layout.addWidget(story)
         privacy = QLabel(
-            "100% on-device: everything stays on this computer. "
-            "No accounts, no cloud, no tracking."
+            "One free account, activated once — then fully offline. "
+            "We store only your email, a random device ID, app version "
+            "and last-seen time. Your habits never leave this computer. "
+            "See PRIVACY.md."
         )
         privacy.setWordWrap(True)
         layout.addWidget(privacy)
