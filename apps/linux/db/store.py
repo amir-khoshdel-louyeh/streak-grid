@@ -92,6 +92,61 @@ def migrate(conn: sqlite3.Connection) -> None:
     cols = [r[1] for r in conn.execute("PRAGMA table_info(habits)").fetchall()]
     if "sort_order" not in cols:  # D1: drag-reorder upgrade
         conn.execute("ALTER TABLE habits ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+    _apply_shared_v2(conn)  # Phase 6: same SQL file every platform runs (C04)
+    conn.commit()
+
+
+def _shared_v2_path() -> Path:
+    # <repo>/core/licensing/migrate_v2.sql — single source (rule R1).
+    # parents: db -> linux -> apps -> repo root.
+    return Path(__file__).resolve().parents[3] / "core" / "licensing" / "migrate_v2.sql"
+
+
+def _apply_shared_v2(conn: sqlite3.Connection) -> None:
+    """Stamp baseline v1 per MIGRATIONS.md, then run the shared v2 script."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS schema_version("
+        "version INTEGER NOT NULL PRIMARY KEY, applied_at TEXT NOT NULL)"
+    )
+    if not conn.execute("SELECT 1 FROM schema_version LIMIT 1").fetchone():
+        from datetime import datetime, timezone
+
+        conn.execute("INSERT INTO schema_version(version, applied_at) VALUES(1, ?)",
+                     (datetime.now(timezone.utc).isoformat(),))
+    path = _shared_v2_path()
+    if not path.is_file():
+        raise RuntimeError(f"shared migration missing: {path}")
+    conn.executescript(path.read_text(encoding="utf-8"))
+
+
+def get_meta(conn: sqlite3.Connection) -> dict:
+    """Phase 6 local account cache (single row, id=1). See SPEC §8."""
+    row = conn.execute("SELECT * FROM meta WHERE id=1").fetchone()
+    if row is None:  # pre-v2 DB that missed migration: repair to defaults
+        conn.execute("INSERT OR IGNORE INTO meta(id) VALUES(1)")
+        conn.commit()
+        row = conn.execute("SELECT * FROM meta WHERE id=1").fetchone()
+    return dict(row)
+
+
+def set_meta(conn: sqlite3.Connection, **fields) -> None:
+    """Update meta columns. Allowed: user_id, device_id, platform,
+    app_version, cached_status, plan, last_check."""
+    allowed = {"user_id", "device_id", "platform", "app_version",
+               "cached_status", "plan", "last_check"}
+    unknown = set(fields) - allowed
+    if unknown:
+        raise ValueError(f"bad meta fields: {sorted(unknown)}")
+    if "cached_status" in fields and fields["cached_status"] not in (
+        "unactivated", "active", "grace_expired", "locked", "suspended",
+    ):
+        raise ValueError(f"bad cached_status: {fields['cached_status']!r}")
+    if "plan" in fields and fields["plan"] not in ("free", "pro"):
+        raise ValueError(f"bad plan: {fields['plan']!r}")
+    if not fields:
+        return
+    cols = ", ".join(f"{k}=?" for k in fields)
+    conn.execute(f"UPDATE meta SET {cols} WHERE id=1", tuple(fields.values()))
     conn.commit()
 
 
