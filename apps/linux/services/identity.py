@@ -18,8 +18,10 @@ import uuid
 from pathlib import Path
 
 SERVICE_NAME = "StreakGrid"
+APP_VERSION = "0.2.0-dev"
 _ACCESS_KEY = "access_jwt"
 _REFRESH_KEY = "refresh_jwt"
+_EMAIL_KEY = "account_email"
 
 
 def _have_keyring() -> bool:
@@ -60,8 +62,8 @@ def _write_secret_file(data: dict) -> None:
             pass
 
 
-def save_tokens(access_jwt: str, refresh_jwt: str) -> None:
-    """Persist tokens to the preferred backend (file as fallback)."""
+def save_tokens(access_jwt: str, refresh_jwt: str, email: str = "") -> None:
+    """Persist tokens (+login email for display) to the preferred backend."""
     saved = False
     if _have_keyring():
         try:
@@ -69,6 +71,7 @@ def save_tokens(access_jwt: str, refresh_jwt: str) -> None:
 
             keyring.set_password(SERVICE_NAME, _ACCESS_KEY, access_jwt)
             keyring.set_password(SERVICE_NAME, _REFRESH_KEY, refresh_jwt)
+            keyring.set_password(SERVICE_NAME, _EMAIL_KEY, email)
             saved = True
         except Exception:
             saved = False
@@ -76,26 +79,30 @@ def save_tokens(access_jwt: str, refresh_jwt: str) -> None:
         data = _read_secret_file()
         data[_ACCESS_KEY] = access_jwt
         data[_REFRESH_KEY] = refresh_jwt
+        data[_EMAIL_KEY] = email
         _write_secret_file(data)
 
 
-def load_tokens() -> tuple[str | None, str | None]:
-    """Return (access, refresh); missing side is None."""
+def load_tokens() -> tuple[str | None, str | None, str]:
+    """Return (access, refresh, email); missing sides are None/''."""
     access: str | None = None
     refresh: str | None = None
+    email = ""
     if _have_keyring():
         try:
             import keyring
 
             access = keyring.get_password(SERVICE_NAME, _ACCESS_KEY)
             refresh = keyring.get_password(SERVICE_NAME, _REFRESH_KEY)
+            email = keyring.get_password(SERVICE_NAME, _EMAIL_KEY) or ""
         except Exception:
-            access, refresh = None, None
-    if not access and not refresh:
+            access, refresh, email = None, None, ""
+    if not access and not refresh and not email:
         data = _read_secret_file()
         access = data.get(_ACCESS_KEY)
         refresh = data.get(_REFRESH_KEY)
-    return access, refresh
+        email = data.get(_EMAIL_KEY) or ""
+    return access, refresh, email
 
 
 def clear_tokens() -> None:
@@ -103,7 +110,7 @@ def clear_tokens() -> None:
         try:
             import keyring
 
-            for key in (_ACCESS_KEY, _REFRESH_KEY):
+            for key in (_ACCESS_KEY, _REFRESH_KEY, _EMAIL_KEY):
                 try:
                     keyring.delete_password(SERVICE_NAME, key)
                 except Exception:
@@ -111,8 +118,8 @@ def clear_tokens() -> None:
         except Exception:
             pass
     data = _read_secret_file()
-    data.pop(_ACCESS_KEY, None)
-    data.pop(_REFRESH_KEY, None)
+    for key in (_ACCESS_KEY, _REFRESH_KEY, _EMAIL_KEY):
+        data.pop(key, None)
     _write_secret_file(data)
 
 
