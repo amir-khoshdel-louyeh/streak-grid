@@ -96,10 +96,37 @@ def migrate(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def shared_core_dir() -> Path | None:
+    """Locate `<root>/core` by walking up (repo, Flatpak /app, tarball...).
+
+    Central helper (rule R1): every runtime load of shared Phase 6 files
+    (`migrate_v2.sql`, `reference.py`) goes through here so packaged
+    layouts keep working. Returns None when not found.
+    """
+    here = Path(__file__).resolve()
+    for parent in (here.parent, *here.parents):
+        candidate = parent / "core" / "licensing"
+        if (candidate / "migrate_v2.sql").is_file() and (candidate / "reference.py").is_file():
+            return parent / "core"
+    return None
+
+
+def find_core_dir(start: Path) -> Path | None:
+    """Pure, testable core of shared_core_dir: walk up from `start`."""
+    start = start.resolve()
+    for parent in (start.parent, *start.parents):
+        candidate = parent / "core" / "licensing"
+        if (candidate / "migrate_v2.sql").is_file() and (candidate / "reference.py").is_file():
+            return parent / "core"
+    return None
+
+
 def _shared_v2_path() -> Path:
-    # <repo>/core/licensing/migrate_v2.sql — single source (rule R1).
-    # parents: db -> linux -> apps -> repo root.
-    return Path(__file__).resolve().parents[3] / "core" / "licensing" / "migrate_v2.sql"
+    # Single source (rule R1): the file every platform runs (C04).
+    root = shared_core_dir()
+    if root is None:
+        raise RuntimeError("shared core/licensing not found next to the app")
+    return root / "licensing" / "migrate_v2.sql"
 
 
 def _apply_shared_v2(conn: sqlite3.Connection) -> None:

@@ -34,12 +34,13 @@ def load_reference():
     global _reference
     if _reference is None:
         import importlib.util
-        from pathlib import Path
 
-        # services -> linux -> apps -> repo root.
-        path = Path(__file__).resolve().parents[3] / "core" / "licensing" / "reference.py"
-        if not path.is_file():
-            raise RuntimeError(f"shared license reference missing: {path}")
+        from db.store import shared_core_dir
+
+        root = shared_core_dir()
+        if root is None:
+            raise RuntimeError("shared core/licensing not found next to the app")
+        path = root / "licensing" / "reference.py"
         spec = importlib.util.spec_from_file_location(
             "streakgrid_license_reference", path)
         module = importlib.util.module_from_spec(spec)
