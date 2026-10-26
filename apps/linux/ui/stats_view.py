@@ -110,11 +110,17 @@ class StatsView(QWidget):
         self.summary.setText(
             f"{len(habits)} habits tracked   ·   overall strength {overall:.0%}"
         )
-        self.extra.setText(self._extra_text(today_iso))
-        self.week_chart.set_rates(self.weekday_rates(today_iso))
+        window84 = self._window_rates(today_iso, 84)
+        window30 = window84[-30:]
+        self.extra.setText(self._extra_text(window84, window30, today_iso))
+        self.week_chart.set_rates(self.weekday_rates(window84, today_iso))
 
-    def weekday_rates(self, today_iso: str) -> list[float]:
-        """Per-weekday completion over last 12 weeks (for the bar chart)."""
+    def _window_rates(self, today_iso: str, days: int) -> list[tuple[int, int]]:
+        """One shared pass: per-day (done, due) oldest→newest ending today.
+
+        Weekday chart, trend and perfect-days all derive from this so a new
+        graph never adds another full history scan.
+        """
         end = date.fromisoformat(today_iso)
         habits = [dict(h) for h in list_habits(self.conn)]
         comp = {int(h["id"]): get_completions(self.conn, int(h["id"])) for h in habits}
@@ -122,47 +128,44 @@ class StatsView(QWidget):
             int(h["id"]): [(p["start_date"], p["end_date"]) for p in list_pauses(self.conn, int(h["id"]))]
             for h in habits
         }
+        out: list[tuple[int, int]] = []
+        for back in range(days - 1, -1, -1):
+            day = end - timedelta(days=back)
+            iso = day.isoformat()
+            done = total = 0
+            for h in habits:
+                if is_due(h, day) and not is_paused(pauses[int(h["id"])], day):
+                    total += 1
+                    if is_done(h, comp[int(h["id"])].get(iso), iso in comp[int(h["id"])]):
+                        done += 1
+            out.append((done, total))
+        return out
+
+    @staticmethod
+    def _weekday_agg(window: list[tuple[int, int]], end: date) -> list[float]:
+        """Fold a day-window into Mon..Sun completion rates."""
+        first = end - timedelta(days=len(window) - 1)
         done = [0] * 7
         total = [0] * 7
-        for i in range(84):
-            d = end - timedelta(days=i)
-            wd = d.weekday()
-            for h in habits:
-                if is_due(h, d) and not is_paused(pauses[int(h["id"])], d):
-                    total[wd] += 1
-                    iso = d.isoformat()
-                    if is_done(h, comp[int(h["id"])].get(iso), iso in comp[int(h["id"])]):
-                        done[wd] += 1
+        for offset, (day_done, day_total) in enumerate(window):
+            wd = (first + timedelta(days=offset)).weekday()
+            done[wd] += day_done
+            total[wd] += day_total
         return [(done[i] / total[i] if total[i] else 0.0) for i in range(7)]
 
-    def _extra_text(self, today_iso: str) -> str:
+    def weekday_rates(self, window: list[tuple[int, int]], today_iso: str) -> list[float]:
+        """Per-weekday completion over the window (for the bar chart)."""
+        return self._weekday_agg(window, date.fromisoformat(today_iso))
+
+    def trend_rates(self, window30: list[tuple[int, int]]) -> list[float]:
+        """Per-day completion share over 30d, oldest→newest (for the trend)."""
+        return [(done / total if total else 0.0) for done, total in window30]
+
+    def _extra_text(self, window84: list[tuple[int, int]],
+                    window30: list[tuple[int, int]], today_iso: str) -> str:
         """Perfect days (30d) + best/worst weekday over last 12 weeks."""
-        end = date.fromisoformat(today_iso)
-        habits = [dict(h) for h in list_habits(self.conn)]
-        comp = {int(h["id"]): get_completions(self.conn, int(h["id"])) for h in habits}
-        pauses = {
-            int(h["id"]): [(p["start_date"], p["end_date"]) for p in list_pauses(self.conn, int(h["id"]))]
-            for h in habits
-        }
-        perfect = 0
-        for i in range(30):
-            d = end - timedelta(days=i)
-            iso = d.isoformat()
-            due = [h for h in habits if is_due(h, d) and not is_paused(pauses[int(h["id"])], d)]
-            if due and all(is_done(h, comp[int(h["id"])].get(iso), iso in comp[int(h["id"])]) for h in due):
-                perfect += 1
-        wd_done = [0] * 7
-        wd_total = [0] * 7
-        for i in range(84):
-            d = end - timedelta(days=i)
-            wd = d.weekday()
-            for h in habits:
-                if is_due(h, d) and not is_paused(pauses[int(h["id"])], d):
-                    wd_total[wd] += 1
-                    iso = d.isoformat()
-                    if is_done(h, comp[int(h["id"])].get(iso), iso in comp[int(h["id"])]):
-                        wd_done[wd] += 1
-        rates = [(wd_done[i] / wd_total[i] if wd_total[i] else 0.0) for i in range(7)]
+        perfect = sum(1 for done, total in window30 if total and done == total)
+        rates = self._weekday_agg(window84, date.fromisoformat(today_iso))
         names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         best_i = max(range(7), key=lambda i: rates[i])
         worst_i = min(range(7), key=lambda i: rates[i])
