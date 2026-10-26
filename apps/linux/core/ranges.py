@@ -12,7 +12,9 @@ inclusive `(start, end)` day window that should be drawn:
   30 days.
 
 Every range also carries the smallest day-cell width and the row height the
-widget should use, so a year stays scrollable while a week stays roomy.
+widget should use. Policy (enforced in timeline.py, mirrored here): day cells
+never shrink below 22px and rows never below 26px — a year stays scrollable
+while a week stays roomy, and tick targets stay tappable at every range.
 """
 
 from __future__ import annotations
@@ -23,6 +25,11 @@ from datetime import date, timedelta
 
 CALENDAR = "calendar"
 ROLLING = "rolling"
+
+#: Hard floor for tickable day cells (policy: cells never get smaller).
+MIN_CELL = 22
+#: Hard floor for habit rows (policy: names stay readable at every range).
+MIN_ROW_H = 26
 
 
 @dataclass(frozen=True)
@@ -42,10 +49,10 @@ RANGES: tuple[RangeSpec, ...] = (
     RangeSpec("week", "This week", rolling_days=7, months=1, calendar_week=True,
               min_cell=34, row_h=36),
     RangeSpec("10d", "10 days", rolling_days=10, months=None, min_cell=26, row_h=32),
-    RangeSpec("1m", "1 month", rolling_days=30, months=1, min_cell=14, row_h=26),
-    RangeSpec("3m", "3 months", rolling_days=90, months=3, min_cell=8, row_h=18),
-    RangeSpec("6m", "6 months", rolling_days=182, months=6, min_cell=5, row_h=14),
-    RangeSpec("1y", "1 year", rolling_days=365, months=12, min_cell=5, row_h=12),
+    RangeSpec("1m", "1 month", rolling_days=30, months=1, min_cell=22, row_h=26),
+    RangeSpec("3m", "3 months", rolling_days=90, months=3, min_cell=22, row_h=26),
+    RangeSpec("6m", "6 months", rolling_days=182, months=6, min_cell=22, row_h=26),
+    RangeSpec("1y", "1 year", rolling_days=365, months=12, min_cell=22, row_h=26),
 )
 
 # Short labels keep the picker narrow enough for small screens; the widget
