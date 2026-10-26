@@ -22,6 +22,31 @@ from services.registry import (
 # locked: {outcome, code}                  (suspended|banned|revoked)
 # offline:{outcome}
 
+_reference = None
+
+
+def load_reference():
+    """Load core/licensing/reference.py (single source, rule R5).
+
+    Imported by path (not `import core...`) because `apps/linux/core`
+    owns the bare `core` package name on sys.path.
+    """
+    global _reference
+    if _reference is None:
+        import importlib.util
+        from pathlib import Path
+
+        # services -> linux -> apps -> repo root.
+        path = Path(__file__).resolve().parents[3] / "core" / "licensing" / "reference.py"
+        if not path.is_file():
+            raise RuntimeError(f"shared license reference missing: {path}")
+        spec = importlib.util.spec_from_file_location(
+            "streakgrid_license_reference", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _reference = module
+    return _reference
+
 
 def check_once(base: str, *, access: str, refresh_jwt: str | None,
                device_id: str, platform: str, app_version: str) -> dict:

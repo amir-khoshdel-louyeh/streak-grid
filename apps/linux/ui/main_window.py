@@ -38,6 +38,7 @@ from db.store import (
     create_folder,
     create_habit,
     get_completions,
+    get_meta,
     init_db,
     list_folders,
     list_habits,
@@ -97,12 +98,16 @@ class MainWindow(QMainWindow):
         self.widget_action.setCheckable(True)
         self.widget_action.setChecked(True)
         self.widget_action.triggered.connect(self._toggle_widget)
+        account_menu = self.menuBar().addMenu("Account")
+        self.account_action = account_menu.addAction("Account…")
+        self.account_action.triggered.connect(self._on_account)
 
         central = QWidget()
         central_layout = QVBoxLayout(central)
         central_layout.setContentsMargins(0, 0, 0, 0)
         central_layout.setSpacing(0)
         central_layout.addWidget(self._build_header())
+        central_layout.addWidget(self._build_account_bar())
 
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -160,6 +165,7 @@ class MainWindow(QMainWindow):
                 self.desktop_widget.move(area.right() - 320, area.bottom() - 220)
         self.desktop_widget.show()
         self.refresh_all()
+        self._setup_account()
 
     # -- layout builders (presentation only, no behaviour) ---------------
     def _build_header(self) -> QFrame:
@@ -863,6 +869,12 @@ class MainWindow(QMainWindow):
         self.check_achievements(show_banner=False)
 
     def _on_add(self) -> None:
+        if self._activation_cap_reached():
+            QMessageBox.information(
+                self, "Limited mode",
+                "Limited mode allows 1 habit — activate free to add more.")
+            self._on_account()
+            return
         dlg = AddHabitDialog(self, self.conn)
         if dlg.exec():
             try:
@@ -932,3 +944,126 @@ class MainWindow(QMainWindow):
 
     def _on_show_achievements(self) -> None:
         AchievementsDialog(self.conn, self).exec()
+
+    # -- Phase 6 account (activation gate + background check, fail-open) --
+    def _build_account_bar(self) -> QFrame:
+        from PySide6.QtWidgets import QHBoxLayout
+
+        bar = QFrame()
+        bar.setObjectName("AccountBar")
+        self.account_bar = bar
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(22, 6, 22, 6)
+        layout.setSpacing(12)
+        self.account_label = QLabel("")
+        self.account_label.setWordWrap(True)
+        layout.addWidget(self.account_label, 1)
+        self.account_button = QPushButton("Activate…")
+        self.account_button.clicked.connect(self._on_account)
+        layout.addWidget(self.account_button)
+        bar.setVisible(False)
+        return bar
+
+    def _setup_account(self) -> None:
+        from PySide6.QtCore import QTimer
+
+        from services.identity import APP_VERSION, ensure_identity
+
+        ensure_identity(self.conn, platform="linux", app_version=APP_VERSION)
+        self._license_thread = None
+        self._refresh_account_bar()
+        # Delayed so startup (and its offline path) stays instant.
+        QTimer.singleShot(2000, self._start_license_check)
+
+    def _start_license_check(self) -> None:
+        from services import identity
+        from services.identity import APP_VERSION
+        from services.license_check import LicenseCheckThread
+        from services.registry import base_url
+
+        thread = getattr(self, "_license_thread", None)
+        if thread is not None and thread.isRunning():
+            return
+        access, refresh_jwt, _email = identity.load_tokens()
+        if not access:
+            return  # unactivated: nothing to verify
+        meta = get_meta(self.conn)
+        self._license_thread = LicenseCheckThread(
+            base_url(), access=access, refresh_jwt=refresh_jwt,
+            device_id=meta.get("device_id") or "", platform="linux",
+            app_version=APP_VERSION, parent=self)
+        self._license_thread.done.connect(self._on_license_done)
+        self._license_thread.finished.connect(self._license_thread.deleteLater)
+        self._license_thread.start()
+
+    def _on_license_done(self, result: dict) -> None:
+        from services import identity
+        from services.license_check import apply_result
+
+        _access, _refresh, email = identity.load_tokens()
+        apply_result(self.conn, result, email=email)
+        self._refresh_account_bar()
+
+    def _account_state(self) -> tuple[str, dict]:
+        from datetime import datetime, timezone
+
+        from services.license_check import load_reference
+
+        meta = get_meta(self.conn)
+        ref = load_reference()
+        state = ref.effective_state(
+            meta.get("cached_status") or "unactivated",
+            meta.get("last_check") or "",
+            datetime.now(timezone.utc).isoformat())
+        return state, meta
+
+    def _refresh_account_bar(self) -> None:
+        state, meta = self._account_state()
+        bar = getattr(self, "account_bar", None)
+        if bar is None:
+            return
+        if state == "active":
+            bar.setVisible(False)
+            return
+        if state == "unactivated":
+            self.account_label.setText(
+                "Limited mode (1 habit). Activate once — free — then use "
+                "StreakGrid fully offline.")
+            self.account_button.setText("Activate…")
+        elif state == "grace_expired":
+            self.account_label.setText(
+                f"Last verified {self._days_since_check(meta)} — connect once "
+                "to refresh. Everything still works.")
+            self.account_button.setText("Account…")
+        else:  # locked
+            self.account_label.setText(
+                "Account locked — the app is read-only. Log in with another "
+                "account or contact support.")
+            self.account_button.setText("Account…")
+        bar.setVisible(True)
+
+    @staticmethod
+    def _days_since_check(meta: dict) -> str:
+        from datetime import datetime, timezone
+
+        try:
+            text = (meta.get("last_check") or "").replace("Z", "+00:00")
+            last = datetime.fromisoformat(text)
+            days = (datetime.now(timezone.utc) - last).days
+            return f"{max(days, 0)} days ago"
+        except ValueError:
+            return "a while ago"
+
+    def _on_account(self) -> None:
+        from ui.auth_dialog import open_account_dialog
+
+        if open_account_dialog(self, self.conn):
+            self._refresh_account_bar()
+            self.refresh_all()
+
+    def _activation_cap_reached(self) -> bool:
+        """Unactivated devices are limited to 1 habit (L08 gate)."""
+        state, _meta = self._account_state()
+        if state != "unactivated":
+            return False
+        return len(list_habits(self.conn)) >= 1
