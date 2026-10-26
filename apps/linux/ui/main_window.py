@@ -497,6 +497,8 @@ class MainWindow(QMainWindow):
 
     def _on_tray_done(self) -> None:
         """Complete first due-undone habit today (tray quick action)."""
+        if not self._require_writable():
+            return
         from datetime import date as _d
 
         today_iso = _d.today().isoformat()
@@ -607,6 +609,8 @@ class MainWindow(QMainWindow):
         self.today_summary.setText(f"🔥 {active_count} active · best {best_all}")
 
     def _on_tap(self, habit_id: int) -> None:
+        if not self._require_writable():
+            return
         today_iso = date.today().isoformat()
         row = self.conn.execute("SELECT * FROM habits WHERE id=?", (habit_id,)).fetchone()
         if row is None:
@@ -624,6 +628,8 @@ class MainWindow(QMainWindow):
 
     def _on_decrement(self, habit_id: int) -> None:
         """Step a counter back down (min 0), fixing overshoots without dialog."""
+        if not self._require_writable():
+            return
         today_iso = date.today().isoformat()
         completions = get_completions(self.conn, habit_id)
         new_value = max(0, int(completions.get(today_iso, 0)) - 1)
@@ -631,6 +637,8 @@ class MainWindow(QMainWindow):
         self.refresh_all()
 
     def _on_open_detail(self, habit_id: int) -> None:
+        if not self._require_writable():
+            return
         dlg = DetailDialog(self.conn, habit_id, self)
         dlg.exec()
         self.refresh_all()
@@ -815,6 +823,8 @@ class MainWindow(QMainWindow):
 
     def _on_progress_toggle(self, habit_id: int) -> None:
         """Tick / untick a habit for *today* from the progress grid."""
+        if not self._require_writable():
+            return
         today_iso = date.today().isoformat()
         row = self.conn.execute("SELECT * FROM habits WHERE id=?", (habit_id,)).fetchone()
         if row is None:
@@ -838,6 +848,8 @@ class MainWindow(QMainWindow):
         self.check_achievements(show_banner=False)
 
     def _on_manage_folders(self) -> None:
+        if not self._require_writable():
+            return
         dlg = FoldersDialog(self.conn, self)
         dlg.exec()
         self.refresh_folders()
@@ -857,6 +869,8 @@ class MainWindow(QMainWindow):
 
     def _on_widget_check(self, habit_id: int) -> None:
         """One-tap check-off from the desktop widget (no modal banner)."""
+        if self._locked():
+            return
         today_iso = date.today().isoformat()
         row = self.conn.execute("SELECT * FROM habits WHERE id=?", (habit_id,)).fetchone()
         if row is None:
@@ -869,6 +883,8 @@ class MainWindow(QMainWindow):
         self.check_achievements(show_banner=False)
 
     def _on_add(self) -> None:
+        if not self._require_writable():
+            return
         if self._activation_cap_reached():
             QMessageBox.information(
                 self, "Limited mode",
@@ -1067,3 +1083,18 @@ class MainWindow(QMainWindow):
         if state != "unactivated":
             return False
         return len(list_habits(self.conn)) >= 1
+
+    # -- Phase 6 enforcement (L09: locked = read-only, offline) ------------
+    def _locked(self) -> bool:
+        from core.entitlements import is_locked
+
+        return is_locked(self.conn)
+
+    def _require_writable(self) -> bool:
+        if not self._locked():
+            return True
+        QMessageBox.information(
+            self, "Locked",
+            "Account locked — the app is read-only. Log in with another "
+            "account or contact support.")
+        return False
