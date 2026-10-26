@@ -101,6 +101,8 @@ class MainWindow(QMainWindow):
         account_menu = self.menuBar().addMenu("Account")
         self.account_action = account_menu.addAction("Account…")
         self.account_action.triggered.connect(self._on_account)
+        self.upgrade_action = account_menu.addAction("Go Pro…")
+        self.upgrade_action.triggered.connect(self._on_upgrade)
 
         central = QWidget()
         central_layout = QVBoxLayout(central)
@@ -1099,6 +1101,12 @@ class MainWindow(QMainWindow):
         if open_account_dialog(self, self.conn):
             self._refresh_account_bar()
             self.refresh_all()
+
+    def _on_upgrade(self) -> None:
+        from ui.upgrade_dialog import open_upgrade_dialog
+
+        open_upgrade_dialog(self, self.conn)
+        self._refresh_account_bar()
 
     def _activation_cap_reached(self) -> bool:
         """Unactivated devices are limited to 1 habit (L08 gate)."""
