@@ -6,6 +6,7 @@
   "command": "streakgrid",
   "finish-args": [
     "--share=ipc",
+    "--share=network",
     "--socket=x11",
     "--socket=wayland",
     "--device=dri",
@@ -17,7 +18,8 @@
       "buildsystem": "simple",
       "build-commands": [
         "pip3 install --prefix=/app -r apps/linux/requirements.txt",
-        "cp -r apps/linux /app/streakgrid"
+        "cp -r apps/linux /app/streakgrid",
+        "cp -r core /app/core"
       ],
       "sources": [
         {
