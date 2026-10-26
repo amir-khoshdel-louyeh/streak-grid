@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.strength_bar import StrengthBar
 from ui.trend_chart import TrendChart
 from ui.week_chart import WeekChart
 
@@ -71,11 +72,14 @@ class StatsView(QWidget):
         io_row.addWidget(self.import_button)
         self.layout.addLayout(io_row)
         self.rows: list[QFrame] = []
+        self.bars: list[QWidget] = []
 
     def refresh_theme(self) -> None:
         """Re-colour painted charts (called on theme toggle)."""
         self.week_chart.refresh_theme()
         self.trend_chart.refresh_theme()
+        for bar in self.bars:
+            bar.refresh_theme()
 
     def refresh(self, today: str | None = None) -> None:
         today_iso = today or date.today().isoformat()
@@ -83,6 +87,7 @@ class StatsView(QWidget):
             self.rows_host.removeWidget(r)
             r.deleteLater()
         self.rows = []
+        self.bars = []
         habits = list_habits(self.conn)
         if not habits:
             self.summary.setText("No data yet.")
@@ -115,10 +120,14 @@ class StatsView(QWidget):
             )
             detail.setObjectName("CardMeta")
             detail.setWordWrap(True)
+            bar = StrengthBar()
+            bar.set_value(strength)
             card_box.addWidget(title, 1)
             card_box.addWidget(detail)
+            card_box.addWidget(bar)
             self.rows_host.addWidget(card)
             self.rows.append(card)
+            self.bars.append(bar)
             lines.append(f"{h['name']} {r30:.2f} {best}")
         overall = sum(strengths) / len(strengths) if strengths else 0.0
         self.summary.setText(
