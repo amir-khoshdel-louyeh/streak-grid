@@ -178,6 +178,14 @@ class StatsView(QWidget):
         return export_completions_csv(self.conn, path)
 
     def _on_export(self) -> None:
+        from core.entitlements import can
+
+        if not can(self.conn, "export"):
+            QMessageBox.information(
+                self, "Pro feature",
+                "CSV export requires Pro (coming soon). "
+                "Your data stays readable on-device.")
+            return
         path = self.export_csv()
         QMessageBox.information(self, "Exported", f"Saved {path}")
 

@@ -776,7 +776,18 @@ class MainWindow(QMainWindow):
         self.grid_heatmap.grab().save(path)
         return path
 
+    def _pro_message(self, feature: str) -> None:
+        QMessageBox.information(
+            self, "Pro feature",
+            f"{feature} requires Pro (coming soon). "
+            "Your data stays readable on-device.")
+
     def _on_export_grid(self) -> None:
+        from core.entitlements import can
+
+        if not can(self.conn, "export"):
+            self._pro_message("PNG export")
+            return
         path = self.export_grid_png()
         QMessageBox.information(self, "Exported", f"Saved {path}")
 
@@ -856,6 +867,12 @@ class MainWindow(QMainWindow):
         self.refresh_all()
 
     def _toggle_widget(self, checked: bool) -> None:
+        from core.entitlements import can
+
+        if checked and not can(self.conn, "widget"):
+            self.widget_action.setChecked(False)
+            self._pro_message("Desktop widget")
+            return
         widget = getattr(self, "desktop_widget", None)
         if widget is None:
             return
@@ -890,6 +907,12 @@ class MainWindow(QMainWindow):
                 self, "Limited mode",
                 "Limited mode allows 1 habit — activate free to add more.")
             self._on_account()
+            return
+        from core.entitlements import habit_limit_for
+
+        limit = habit_limit_for(self.conn)
+        if limit is not None and len(list_habits(self.conn)) >= limit:
+            self._pro_message(f"Free allows up to {limit} habits")
             return
         dlg = AddHabitDialog(self, self.conn)
         if dlg.exec():
