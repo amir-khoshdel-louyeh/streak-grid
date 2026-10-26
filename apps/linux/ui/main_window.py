@@ -492,6 +492,9 @@ class MainWindow(QMainWindow):
         chart = getattr(getattr(self, "stats_view", None), "week_chart", None)
         if chart is not None:
             chart.refresh_theme()
+        trend = getattr(getattr(self, "stats_view", None), "trend_chart", None)
+        if trend is not None:
+            trend.refresh_theme()
         progress = getattr(self, "progress_table", None)
         if progress is not None:
             progress.refresh_theme()

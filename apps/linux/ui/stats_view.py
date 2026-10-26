@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.trend_chart import TrendChart
 from ui.week_chart import WeekChart
 
 from core.schedule import is_due
@@ -51,7 +52,15 @@ class StatsView(QWidget):
         self.rows_host.setSpacing(8)
         self.layout.addLayout(self.rows_host)
         self.week_chart = WeekChart()
+        weekday_title = QLabel("By weekday (12 weeks)")
+        weekday_title.setObjectName("MutedText")
+        self.layout.addWidget(weekday_title)
         self.layout.addWidget(self.week_chart)
+        trend_title = QLabel("Last 30 days")
+        trend_title.setObjectName("MutedText")
+        self.layout.addWidget(trend_title)
+        self.trend_chart = TrendChart()
+        self.layout.addWidget(self.trend_chart)
         self.export_button = QPushButton("Export CSV")
         self.export_button.clicked.connect(self._on_export)
         self.import_button = QPushButton("Import CSV")
@@ -62,6 +71,11 @@ class StatsView(QWidget):
         io_row.addWidget(self.import_button)
         self.layout.addLayout(io_row)
         self.rows: list[QFrame] = []
+
+    def refresh_theme(self) -> None:
+        """Re-colour painted charts (called on theme toggle)."""
+        self.week_chart.refresh_theme()
+        self.trend_chart.refresh_theme()
 
     def refresh(self, today: str | None = None) -> None:
         today_iso = today or date.today().isoformat()
@@ -114,6 +128,7 @@ class StatsView(QWidget):
         window30 = window84[-30:]
         self.extra.setText(self._extra_text(window84, window30, today_iso))
         self.week_chart.set_rates(self.weekday_rates(window84, today_iso))
+        self.trend_chart.set_rates(self.trend_rates(window30))
 
     def _window_rates(self, today_iso: str, days: int) -> list[tuple[int, int]]:
         """One shared pass: per-day (done, due) oldest→newest ending today.
