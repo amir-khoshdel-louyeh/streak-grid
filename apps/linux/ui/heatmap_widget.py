@@ -81,12 +81,32 @@ class HeatmapWidget(QWidget):
     def _pad_top(self) -> int:
         return PAD_TOP if self._axis else 0
 
+    def _fill_mode(self) -> bool:
+        """Year grid with many columns stretches to fill the full width."""
+        return bool(self._responsive and self._cols() >= 20)
+
     def _cell_for_width(self, width: int) -> int:
         cols = self._cols()
         usable = int(width) - self._pad_left() - (cols + 1) * self._gap
-        return max(3, min(self._cell, usable // cols))
+        fill = usable // max(1, cols)
+        if self._fill_mode():
+            # Year view: grow to fill the full width (no upper cap),
+            # so the chart touches the box with only a small margin.
+            return max(3, fill)
+        return max(3, min(self._cell, fill))
+
+    def _cell_float_for_width(self, width: int) -> float:
+        """Exact (fractional) cell size so the grid ends flush on the right."""
+        cols = self._cols()
+        usable = float(width) - self._pad_left() - (cols + 1) * self._gap
+        return max(3.0, usable / max(1, cols))
 
     def _height_for_width(self, width: int) -> int:
+        import math
+
+        if self._fill_mode():
+            cell = self._cell_float_for_width(max(1, int(width)))
+            return int(math.ceil(self._pad_top() + 7 * (cell + self._gap) + self._gap))
         return self._pad_top() + 7 * (self._cell_for_width(width) + self._gap) + self._gap
 
     def _resize_for_width(self) -> None:
@@ -106,9 +126,43 @@ class HeatmapWidget(QWidget):
     # -- paint ----------------------------------------------------------
     def paintEvent(self, event) -> None:  # noqa: N802
         cols = self._cols()
-        cell = self._cell_for_width(self.width()) if self._responsive else self._cell
         gap = self._gap
         pad_left, pad_top = self._pad_left(), self._pad_top()
+        if self._fill_mode():
+            cell_f = self._cell_float_for_width(self.width())
+            offset_x = float(pad_left)
+            step = cell_f + gap
+            radius = max(1.0, cell_f / 4.0)
+
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setPen("transparent")
+            for col in range(cols):
+                for row in range(7):
+                    level = 0
+                    if col < len(self._grid) and row < len(self._grid[col]):
+                        level = max(0, min(4, int(self._grid[col][row])))
+                    painter.setBrush(QColor(self._colors[level]))
+                    x = offset_x + col * step
+                    y = pad_top + gap + row * step
+                    painter.drawRoundedRect(x, y, cell_f, cell_f, radius, radius)
+
+            if self._axis:
+                painter.setPen(self._label)
+                painter.setFont(QFont("Sans", max(7, min(9, int(cell_f)))))
+                for row, text in ((0, "Mon"), (2, "Wed"), (4, "Fri")):
+                    y = pad_top + gap + row * step
+                    painter.drawText(0, int(y), pad_left - 5, int(cell_f),
+                                     Qt.AlignRight | Qt.AlignVCenter, text)
+                for col, text in self._month_marks:
+                    if 0 <= col < cols:
+                        x = offset_x + col * step
+                        painter.drawText(int(x), 0, 64, pad_top,
+                                         Qt.AlignLeft | Qt.AlignVCenter, text)
+            painter.end()
+            return
+
+        cell = self._cell_for_width(self.width()) if self._responsive else self._cell
         total_w = cols * (cell + gap) + gap
         offset_x = pad_left if self._axis else max(gap, (self.width() - total_w) // 2)
 

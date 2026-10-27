@@ -301,7 +301,8 @@ class MainWindow(QMainWindow):
         section = QGroupBox("Heatmap")
         self.sections.append(section)
         layout = QVBoxLayout(section)
-        layout.setSpacing(14)
+        layout.setContentsMargins(15, 10, 15, 10)
+        layout.setSpacing(8)
 
         top = QHBoxLayout()
         top.setSpacing(10)
