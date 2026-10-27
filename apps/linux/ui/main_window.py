@@ -489,12 +489,9 @@ class MainWindow(QMainWindow):
                        getattr(self, "grid_heatmap", None)):
             if widget is not None and hasattr(widget, "refresh_theme"):
                 widget.refresh_theme()
-        chart = getattr(getattr(self, "stats_view", None), "week_chart", None)
-        if chart is not None:
-            chart.refresh_theme()
-        trend = getattr(getattr(self, "stats_view", None), "trend_chart", None)
-        if trend is not None:
-            trend.refresh_theme()
+        stats = getattr(self, "stats_view", None)
+        if stats is not None and hasattr(stats, "refresh_theme"):
+            stats.refresh_theme()
         progress = getattr(self, "progress_table", None)
         if progress is not None:
             progress.refresh_theme()

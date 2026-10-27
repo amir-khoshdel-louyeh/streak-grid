@@ -17,9 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ui.strength_bar import StrengthBar
 from ui.trend_chart import TrendChart
-from ui.week_chart import WeekChart
 
 from core.schedule import is_due
 from core.streak import (
@@ -52,11 +50,6 @@ class StatsView(QWidget):
         self.rows_host = QVBoxLayout()
         self.rows_host.setSpacing(8)
         self.layout.addLayout(self.rows_host)
-        self.week_chart = WeekChart()
-        weekday_title = QLabel("By weekday (12 weeks)")
-        weekday_title.setObjectName("MutedText")
-        self.layout.addWidget(weekday_title)
-        self.layout.addWidget(self.week_chart)
         trend_title = QLabel("Last 30 days")
         trend_title.setObjectName("MutedText")
         self.layout.addWidget(trend_title)
@@ -72,14 +65,10 @@ class StatsView(QWidget):
         io_row.addWidget(self.import_button)
         self.layout.addLayout(io_row)
         self.rows: list[QFrame] = []
-        self.bars: list[QWidget] = []
 
     def refresh_theme(self) -> None:
         """Re-colour painted charts (called on theme toggle)."""
-        self.week_chart.refresh_theme()
         self.trend_chart.refresh_theme()
-        for bar in self.bars:
-            bar.refresh_theme()
 
     def refresh(self, today: str | None = None) -> None:
         today_iso = today or date.today().isoformat()
@@ -87,7 +76,6 @@ class StatsView(QWidget):
             self.rows_host.removeWidget(r)
             r.deleteLater()
         self.rows = []
-        self.bars = []
         habits = list_habits(self.conn)
         if not habits:
             self.summary.setText("No data yet.")
@@ -120,14 +108,10 @@ class StatsView(QWidget):
             )
             detail.setObjectName("CardMeta")
             detail.setWordWrap(True)
-            bar = StrengthBar()
-            bar.set_value(strength)
             card_box.addWidget(title, 1)
             card_box.addWidget(detail)
-            card_box.addWidget(bar)
             self.rows_host.addWidget(card)
             self.rows.append(card)
-            self.bars.append(bar)
             lines.append(f"{h['name']} {r30:.2f} {best}")
         overall = sum(strengths) / len(strengths) if strengths else 0.0
         self.summary.setText(
@@ -136,7 +120,6 @@ class StatsView(QWidget):
         window84 = self._window_rates(today_iso, 84)
         window30 = window84[-30:]
         self.extra.setText(self._extra_text(window84, window30, today_iso))
-        self.week_chart.set_rates(self.weekday_rates(window84, today_iso))
         self.trend_chart.set_rates(self.trend_rates(window30))
 
     def _window_rates(self, today_iso: str, days: int) -> list[tuple[int, int]]:
@@ -176,10 +159,6 @@ class StatsView(QWidget):
             done[wd] += day_done
             total[wd] += day_total
         return [(done[i] / total[i] if total[i] else 0.0) for i in range(7)]
-
-    def weekday_rates(self, window: list[tuple[int, int]], today_iso: str) -> list[float]:
-        """Per-weekday completion over the window (for the bar chart)."""
-        return self._weekday_agg(window, date.fromisoformat(today_iso))
 
     def trend_rates(self, window30: list[tuple[int, int]]) -> list[float]:
         """Per-day completion share over 30d, oldest→newest (for the trend)."""
