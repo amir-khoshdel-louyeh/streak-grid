@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
         self.theme_action.triggered.connect(self._on_toggle_theme)
         self.widget_action = view_menu.addAction("Desktop widget")
         self.widget_action.setCheckable(True)
-        self.widget_action.setChecked(True)
+        self.widget_action.setChecked(False)  # real state applied in _setup_widget
         self.widget_action.triggered.connect(self._toggle_widget)
         account_menu = self.menuBar().addMenu("Account")
         self.account_action = account_menu.addAction("Account…")
@@ -165,7 +165,7 @@ class MainWindow(QMainWindow):
             if screen is not None:
                 area = screen.availableGeometry()
                 self.desktop_widget.move(area.right() - 320, area.bottom() - 220)
-        self.desktop_widget.show()
+        self._setup_widget()
         self.refresh_all()
         self._setup_account()
 
@@ -874,6 +874,15 @@ class MainWindow(QMainWindow):
         self.refresh_folders()
         self.refresh_all()
 
+    def _setup_widget(self) -> None:
+        """Desktop widget stays hidden until the user enables it in View menu."""
+        visible = self.desktop_widget._settings().value("visible", False)
+        show = visible is True or str(visible).lower() == "true"
+        self.widget_action.setChecked(show)
+        if show:
+            self.desktop_widget.refresh()
+            self.desktop_widget.show()
+
     def _toggle_widget(self, checked: bool) -> None:
         from core.entitlements import can
 
@@ -884,6 +893,7 @@ class MainWindow(QMainWindow):
         widget = getattr(self, "desktop_widget", None)
         if widget is None:
             return
+        widget._settings().setValue("visible", bool(checked))
         if checked:
             widget.start_auto_refresh(60)
             widget.refresh()
