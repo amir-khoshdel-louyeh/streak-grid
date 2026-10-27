@@ -17,7 +17,7 @@ def main() -> int:
     app.setApplicationName("StreakGrid")
     apply_theme(app)
     window = MainWindow()
-    window.show()
+    window.showMaximized()
     maybe_welcome(window)
     return app.exec()
 
