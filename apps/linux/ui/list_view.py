@@ -134,6 +134,7 @@ class ListView(QWidget):
 
         text = QVBoxLayout()
         text.setSpacing(2)
+        text.setContentsMargins(0, 0, 0, 0)
         name = QLabel(str(h["name"]))
         name.setObjectName("CardTitle")
         name.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
@@ -164,9 +165,12 @@ class ListView(QWidget):
         strip.set_series(self._strip_series(hd, completions, pauses, today_iso))
         self._strips[int(h["id"])] = strip
 
-        box.addWidget(grip)
-        box.addLayout(text, 1)
-        box.addWidget(strip)
+        text_host = QWidget()
+        text_host.setLayout(text)
+        text_host.setFixedWidth(150)
+        box.addWidget(grip, 0)
+        box.addWidget(text_host, 0)
+        box.addWidget(strip, 1)
         return row
 
     def _activate_for(self, habit_id: int):
