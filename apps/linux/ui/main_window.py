@@ -498,6 +498,9 @@ class MainWindow(QMainWindow):
         progress = getattr(self, "progress_table", None)
         if progress is not None:
             progress.refresh_theme()
+        listing = getattr(self, "list_view", None)
+        if listing is not None and hasattr(listing, "refresh_theme"):
+            listing.refresh_theme()
         self._update_heatmap_legend()
 
     def _on_tray_done(self) -> None:

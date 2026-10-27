@@ -1,4 +1,4 @@
-"""List view — G1: full-width rows with drag-reorder and a year mini heatmap."""
+"""List view — full-width rows with drag-reorder and a 90-day pulse strip."""
 
 from __future__ import annotations
 
@@ -19,11 +19,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.heatmap import build_matrix
 from core.schedule import is_due, next_due
-from core.streak import best_streak, current_streak
+from core.streak import best_streak, current_streak, is_done, is_paused
 from db.store import get_completions, list_folders, list_habits, list_pauses, set_habit_order
-from ui.heatmap_widget import HeatmapWidget
+from ui.activity_strip import ActivityStrip
 
 
 def _plain(text: str) -> str:
@@ -50,7 +49,7 @@ class ListView(QWidget):
     COLS = 1
     ROW_H = 72
     GAP = 8
-    MINI_ROW_WIDTH = 620  # below this the year mini heatmap is dropped
+    STRIP_DAYS = 90  # pulse strip window: done spikes, missed dips, off gaps
 
     def __init__(self, conn: sqlite3.Connection, parent=None, on_open=None) -> None:
         super().__init__(parent)
@@ -85,18 +84,39 @@ class ListView(QWidget):
         self._order: list[int] = []
         self._visible: list[int] = []
         self._rows: dict[int, QFrame] = {}
-        self._minis: dict[int, HeatmapWidget] = {}
+        self._strips: dict[int, ActivityStrip] = {}
         self._folders: dict[int, dict] = {}
         self._press: tuple[int, QPoint] | None = None
 
+    def refresh_theme(self) -> None:
+        """Re-colour the pulse strips (called on theme toggle)."""
+        for strip in self._strips.values():
+            strip.refresh_theme()
+
     # -- rows ------------------------------------------------------------
+    def _strip_series(self, hd: dict, completions: dict, pauses: list,
+                      today_iso: str) -> list[float | None]:
+        """90-day pulse data, oldest first: 1.0 done, 0.0 missed, None off."""
+        from datetime import date, timedelta
+
+        end = date.fromisoformat(today_iso)
+        out: list[float | None] = []
+        for back in range(self.STRIP_DAYS - 1, -1, -1):
+            day = end - timedelta(days=back)
+            iso = day.isoformat()
+            if not is_due(hd, day) or is_paused(pauses, day):
+                out.append(None)
+            else:
+                out.append(1.0 if is_done(hd, completions.get(iso),
+                                         iso in completions) else 0.0)
+        return out
+
     def _build_row(self, h: sqlite3.Row, today_iso: str) -> QFrame:
         hd = dict(h)
         completions = get_completions(self.conn, int(h["id"]))
         pauses = [(p["start_date"], p["end_date"]) for p in list_pauses(self.conn, int(h["id"]))]
         cur = current_streak(hd, completions, pauses, today_iso)
         best = best_streak(hd, completions, pauses, today_iso)
-        target = int(hd.get("target_count", 1) or 1)
 
         row = _HabitRow(on_activate=self._activate_for(int(h["id"])))
         row.setProperty("card", True)
@@ -140,17 +160,13 @@ class ListView(QWidget):
         text.addWidget(name)
         text.addWidget(meta)
 
-        mini = HeatmapWidget(cell=6, gap=1)
-        mini.set_matrix(build_matrix(
-            completions, end_date=today_iso, days=365, target=target
-        ))
-        mini.setFixedSize(mini.sizeHint())
-        mini.setVisible(self.width() >= self.MINI_ROW_WIDTH)
-        self._minis[int(h["id"])] = mini
+        strip = ActivityStrip()
+        strip.set_series(self._strip_series(hd, completions, pauses, today_iso))
+        self._strips[int(h["id"])] = strip
 
         box.addWidget(grip)
         box.addLayout(text, 1)
-        box.addWidget(mini)
+        box.addWidget(strip)
         return row
 
     def _activate_for(self, habit_id: int):
@@ -166,7 +182,7 @@ class ListView(QWidget):
         for w in self._rows.values():
             w.deleteLater()
         self._rows = {}
-        self._minis = {}
+        self._strips = {}
         self._folders = {int(f["id"]): dict(f) for f in list_folders(self.conn)}
         self._order = [int(h["id"]) for h in list_habits(self.conn, include_archived=True)]
         query = self.search.text().strip().lower()
@@ -177,7 +193,6 @@ class ListView(QWidget):
             self._rows[hid] = self._build_row(h, today_iso)
         self._relayout()
         self._fit_height()
-        self._apply_compact()
         self.empty.setVisible(not self._visible)
         self.empty.setText("No habits found." if query and not self._visible else "No habits yet.")
 
@@ -198,16 +213,6 @@ class ListView(QWidget):
             self.grid.takeAt(0)
         for i, hid in enumerate(self._visible):
             self.grid.addWidget(self._rows[hid], i // self.COLS, i % self.COLS)
-
-    def _apply_compact(self) -> None:
-        """Drop the year mini heatmap when the rows get too narrow for it."""
-        show_mini = self.width() >= self.MINI_ROW_WIDTH
-        for mini in self._minis.values():
-            mini.setVisible(show_mini)
-
-    def resizeEvent(self, event) -> None:  # noqa: N802
-        super().resizeEvent(event)
-        self._apply_compact()
 
     def _fit_height(self) -> None:
         """Grow with the content and let the page's outer scroll handle it."""
