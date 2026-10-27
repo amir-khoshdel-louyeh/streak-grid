@@ -8,8 +8,9 @@ choices persist in QSettings. See `core.ranges` for the window maths.
 The day grid is painted rather than built from widgets, so a one-year span
 with many habits stays cheap, and the habit-name column sits outside the
 scroll area so names stay visible while a long range is scrolled sideways.
-Day cells stretch to fill the section width; when a range cannot fit even at
-its smallest readable cell size, the grid keeps that size and scrolls.
+Day cells stretch to fill the section width but never shrink below 22px and
+rows never below 26px (policy floor — tick targets stay tappable and names
+readable); beyond that the grid keeps its size and scrolls sideways.
 Today's column is highlighted, and its cell is the only clickable one.
 """
 
@@ -37,6 +38,8 @@ from core.ranges import (
     BASES,
     DEFAULT_BASE,
     DEFAULT_RANGE,
+    MIN_CELL,
+    MIN_ROW_H,
     RANGES,
     RangeSpec,
     base_for,
@@ -100,10 +103,21 @@ def gap_for(cell: int) -> int:
     return 1
 
 
+def floor_cell(spec: RangeSpec) -> int:
+    """Smallest day-cell width for `spec` — never below the policy floor."""
+    return max(spec.min_cell, MIN_CELL)
+
+
+def floor_row(spec: RangeSpec) -> int:
+    """Habit row height for `spec` — never below the policy floor."""
+    return max(spec.row_h, MIN_ROW_H)
+
+
 def min_width(spec: RangeSpec, cols: int) -> int:
     """Width the day cells need at the range's smallest cell size."""
-    gap = gap_for(spec.min_cell)
-    return max(1, cols) * (spec.min_cell + gap) + gap
+    cell = floor_cell(spec)
+    gap = gap_for(cell)
+    return max(1, cols) * (cell + gap) + gap
 
 
 @dataclass
@@ -139,21 +153,23 @@ class Metrics:
 
 
 def metrics_for(spec: RangeSpec, cols: int, width: int) -> Metrics:
-    """Cell size for `width`: fill the space, down to the range's minimum."""
+    """Cell size for `width`: fill the space, down to the policy minimum."""
     cols = max(1, cols)
-    gap = gap_for(spec.min_cell)
+    floor = floor_cell(spec)
+    row_h = floor_row(spec)
+    gap = gap_for(floor)
     inner = width - gap * (cols + 1)
-    cell = max(spec.min_cell, inner // cols)
+    cell = max(floor, inner // cols)
     gap = gap_for(cell)
     inner = width - gap * (cols + 1)
-    cell = max(spec.min_cell, inner // cols)
+    cell = max(floor, inner // cols)
     # Keep the right edge flush: hand any rounding remainder to the left inset.
     left = gap + max(0, inner - cell * cols)
     mode = "wide" if cell >= 40 else "day" if cell >= 16 else "month"
     axis_h = AXIS_WIDE if mode == "wide" else AXIS_DAY if mode == "day" else AXIS_MONTH
-    return Metrics(gap=gap, cell=cell, row_h=spec.row_h,
-                   row_gap=max(2, min(6, spec.row_h // 4)), axis_h=axis_h,
-                   mode=mode, cols=cols, left=left)
+    return Metrics(gap=gap, cell=cell, row_h=row_h,
+                    row_gap=max(2, min(6, row_h // 4)), axis_h=axis_h,
+                    mode=mode, cols=cols, left=left)
 
 
 class TimelineCells(QWidget):
