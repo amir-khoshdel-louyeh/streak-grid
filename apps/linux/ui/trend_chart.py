@@ -237,14 +237,18 @@ class HabitLinesChart(QWidget):
             btn.setCursor(Qt.PointingHandCursor)
             btn.setToolTip(f"Toggle {name}")
             btn.setStyleSheet(f"color: {PALETTE[i % len(PALETTE)]}; text-align: left;")
-            btn.toggled.connect(lambda _c, idx=i: self._on_toggle(idx, _c))
+            btn.setProperty("shortName", short)
+            btn.toggled.connect(lambda _c, idx=i, b=btn: self._on_toggle(idx, _c, b))
             self._legend.addWidget(btn, i // 3, i % 3)
 
-    def _on_toggle(self, index: int, checked: bool) -> None:
+    def _on_toggle(self, index: int, checked: bool, btn: QPushButton | None = None) -> None:
         if checked:
             self._hidden.discard(index)
         else:
             self._hidden.add(index)
+        if btn is not None:
+            short = btn.property("shortName") or ""
+            btn.setText(f"{'●' if checked else '○'}  {short}")
         self._push_visible()
 
     def _push_visible(self) -> None:
