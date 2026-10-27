@@ -23,6 +23,7 @@ class HabitCard(QFrame):
         on_tap=None,
         on_open=None,
         on_decrement=None,
+        on_increment=None,
         counter_text: str = "",
         streak_active: bool = False,
         done: bool = False,
@@ -36,6 +37,7 @@ class HabitCard(QFrame):
         self._on_tap = on_tap
         self._on_open = on_open
         self._on_decrement = on_decrement
+        self._on_increment = on_increment
         self._base_name = name
         self._counter_text = counter_text
         self._streak_active = streak_active
@@ -43,6 +45,7 @@ class HabitCard(QFrame):
         self._folder_color = folder_color
         self._done = bool(done)
         self.dec_button: QPushButton | None = None
+        self.inc_button: QPushButton | None = None
 
         self.setProperty("card", True)
         self.setMinimumHeight(70)
@@ -80,6 +83,13 @@ class HabitCard(QFrame):
             self.dec_button.setToolTip("Decrease today's count")
             self.dec_button.clicked.connect(self._handle_decrement)
             layout.addWidget(self.dec_button)
+            self.inc_button = QPushButton("+")
+            self.inc_button.setObjectName("IconButton")
+            self.inc_button.setFixedSize(34, 34)
+            self.inc_button.setCursor(Qt.PointingHandCursor)
+            self.inc_button.setToolTip("Increase today's count")
+            self.inc_button.clicked.connect(self._handle_increment)
+            layout.addWidget(self.inc_button)
 
         self.tap_button = QPushButton()
         self.tap_button.setObjectName("CheckButton")
@@ -129,6 +139,10 @@ class HabitCard(QFrame):
     def _handle_decrement(self) -> None:
         if self._on_decrement is not None:
             self._on_decrement(self.habit_id)
+
+    def _handle_increment(self) -> None:
+        if self._on_increment is not None:
+            self._on_increment(self.habit_id)
 
     # -- setters --------------------------------------------------------
     def set_done(self, done: bool) -> None:

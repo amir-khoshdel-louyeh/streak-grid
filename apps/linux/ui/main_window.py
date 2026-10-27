@@ -598,6 +598,7 @@ class MainWindow(QMainWindow):
                 on_tap=self._on_tap,
                 on_open=self._on_open_detail,
                 on_decrement=self._on_decrement,
+                on_increment=self._on_increment,
                 counter_text=counter_text,
                 streak_active=streak > 0,
                 done=done,
@@ -623,11 +624,15 @@ class MainWindow(QMainWindow):
             return
         hd = dict(row)
         completions = get_completions(self.conn, habit_id)
-        current = int(completions.get(today_iso, 0))
         has_row = today_iso in completions
         if hd.get("type") == "counter":
-            new_value = current + 1
-            log_completion(self.conn, habit_id, today_iso, new_value)
+            # Tick = fully done (e.g. all 8 glasses), tick again = undo.
+            # Fine-grained +/- stepping lives on the card's −/+ buttons.
+            if is_done(hd, completions.get(today_iso), has_row):
+                clear_completion(self.conn, habit_id, today_iso)
+            else:
+                target = int(hd.get("target_count", 1) or 1)
+                log_completion(self.conn, habit_id, today_iso, target)
         elif hd.get("type") == "dont_do":
             # Toggle: clean day <-> recorded slip.
             if is_done(hd, completions.get(today_iso), has_row):
@@ -648,6 +653,16 @@ class MainWindow(QMainWindow):
         today_iso = date.today().isoformat()
         completions = get_completions(self.conn, habit_id)
         new_value = max(0, int(completions.get(today_iso, 0)) - 1)
+        log_completion(self.conn, habit_id, today_iso, new_value)
+        self.refresh_all()
+
+    def _on_increment(self, habit_id: int) -> None:
+        """Step a counter up by one (e.g. one more glass of water)."""
+        if not self._require_writable():
+            return
+        today_iso = date.today().isoformat()
+        completions = get_completions(self.conn, habit_id)
+        new_value = int(completions.get(today_iso, 0)) + 1
         log_completion(self.conn, habit_id, today_iso, new_value)
         self.refresh_all()
 
@@ -918,8 +933,12 @@ class MainWindow(QMainWindow):
         if row is None:
             return
         hd = dict(row)
-        current = int(get_completions(self.conn, habit_id).get(today_iso, 0))
-        new_value = current + 1 if hd.get("type") == "counter" else 1
+        if hd.get("type") == "counter":
+            # One tap = fully done (all glasses), like the card tick.
+            current = int(get_completions(self.conn, habit_id).get(today_iso, 0))
+            new_value = max(current, int(hd.get("target_count", 1) or 1))
+        else:
+            new_value = 1
         log_completion(self.conn, habit_id, today_iso, new_value)
         self.refresh_all()
         self.check_achievements(show_banner=False)

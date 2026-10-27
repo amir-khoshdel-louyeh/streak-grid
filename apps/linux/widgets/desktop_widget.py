@@ -137,7 +137,12 @@ class DesktopWidget(QWidget):
             return
         hd = dict(row)
         comp = get_completions(self.conn, habit_id)
-        new_value = int(comp.get(today_iso, 0)) + 1 if hd.get("type") == "counter" else 1
+        if hd.get("type") == "counter":
+            # One tap = fully done, matching the card tick behaviour.
+            new_value = max(int(comp.get(today_iso, 0)),
+                            int(hd.get("target_count", 1) or 1))
+        else:
+            new_value = 1
         log_completion(self.conn, habit_id, today_iso, new_value)
         self.refresh()
 
