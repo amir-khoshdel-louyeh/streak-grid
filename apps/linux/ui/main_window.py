@@ -198,9 +198,8 @@ class MainWindow(QMainWindow):
         row.addLayout(titles)
         row.addStretch(1)
 
-        self.theme_button = QPushButton("🌙" if is_dark() else "☀️")
+        self.theme_button = QPushButton(self._theme_button_text())
         self.theme_button.setProperty("role", "ghost")
-        self.theme_button.setFixedWidth(46)
         self.theme_button.setCursor(Qt.PointingHandCursor)
         self.theme_button.setToolTip("Toggle light / dark theme  (Ctrl+T)")
         self.theme_button.clicked.connect(self._on_toggle_theme)
@@ -474,13 +473,19 @@ class MainWindow(QMainWindow):
         self._force_quit = True
         self.close()
 
+    @staticmethod
+    def _theme_button_text() -> str:
+        # Plain glyphs (DejaVu-safe) + word: color-emoji moons/suns render
+        # blank on systems without an emoji font, leaving an empty button.
+        return "☀ Light" if is_dark() else "☾ Dark"
+
     def _on_toggle_theme(self) -> None:
         from PySide6.QtWidgets import QApplication
 
         set_dark(not is_dark())
         apply_theme(QApplication.instance())
         if hasattr(self, "theme_button"):
-            self.theme_button.setText("🌙" if is_dark() else "☀️")
+            self.theme_button.setText(self._theme_button_text())
         self._refresh_painted_theme()
         self.refresh_all()
 
