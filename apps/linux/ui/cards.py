@@ -109,7 +109,7 @@ class HabitCard(QFrame):
 
     def _apply_state(self) -> None:
         self.tap_button.setText("✓" if self._done else "○")
-        self.tap_button.setToolTip("Done today" if self._done else "Mark done for today")
+        self.tap_button.setToolTip("Done today — tap to undo" if self._done else "Mark done for today")
         self.tap_button.setProperty("state", "done" if self._done else "todo")
         self.setProperty("done", self._done)
         for widget in (self.tap_button, self):

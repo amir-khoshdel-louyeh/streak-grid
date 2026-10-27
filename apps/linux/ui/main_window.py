@@ -626,11 +626,20 @@ class MainWindow(QMainWindow):
         hd = dict(row)
         completions = get_completions(self.conn, habit_id)
         current = int(completions.get(today_iso, 0))
+        has_row = today_iso in completions
         if hd.get("type") == "counter":
             new_value = current + 1
+            log_completion(self.conn, habit_id, today_iso, new_value)
+        elif hd.get("type") == "dont_do":
+            # Toggle: clean day <-> recorded slip.
+            if is_done(hd, completions.get(today_iso), has_row):
+                log_completion(self.conn, habit_id, today_iso, 1)
+            else:
+                clear_completion(self.conn, habit_id, today_iso)
+        elif is_done(hd, completions.get(today_iso), has_row):
+            clear_completion(self.conn, habit_id, today_iso)
         else:
-            new_value = 1  # yes_no check-off; dont_do slip (MVP)
-        log_completion(self.conn, habit_id, today_iso, new_value)
+            log_completion(self.conn, habit_id, today_iso, 1)
         self.refresh_all()
         self.check_achievements(show_banner=True)
 
