@@ -24,6 +24,12 @@ StreakGrid is built around a stricter definition of a streak than most habit app
 
 The UI borrows the contribution-grid metaphor: one row per habit, one column per day, with calendar or rolling windows. Today is the only editable column in the progress view — retroactive editing happens deliberately through the habit detail dialog, not by accident.
 
+## Screenshots
+
+| Progress grid | Stats |
+|---|---|
+| ![](assets/readme/progress-grid.png) | ![](assets/readme/stats.png) |
+
 ## Status by platform
 
 | Platform | Stack | Status |
